@@ -41,11 +41,13 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
+    "start": "vite build && node server/app/main.js",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
-    "qa:transit": "node scripts/qa-transit.mjs"
+    "qa:transit": "node scripts/qa-transit.mjs",
+    "serve": "node server/app/main.js"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
@@ -57,7 +59,10 @@
     "hls.js": "^1.7.3",
     "mgrs": "^2.1.0",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2"
+    "satellite.js": "^6.0.2",
+    "express": "^5.2.1",
+    "qrcode": "^1.5.4",
+    "nodemailer": "^7.0.0"
   },
   "devDependencies": {
     "prettier": "3.9.6",

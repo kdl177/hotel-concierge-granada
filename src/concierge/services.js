@@ -1,7 +1,12 @@
 /** Network helpers: routing (walk / bike / transit) and place search. */
-import { HOTEL } from './data/hotel.js';
-import { POIS } from './data/pois.js';
 import { L } from './i18n.js';
+
+/** Live hotel config (set by main.js after loading /api/h/:slug/config). */
+export const CTX = { slug: 'default', hotel: { lat: 0, lon: 0 }, pois: [], roomToken: '' };
+export function setContext(next) {
+  Object.assign(CTX, next);
+}
+const HOTEL = new Proxy({}, { get: (_, k) => CTX.hotel[k] });
 
 const GRANADA_BOUNDS = '37.05,-3.75|37.30,-3.45';
 
@@ -55,7 +60,7 @@ function normalize(s) {
 export async function searchPlaces(query, { signal } = {}) {
   const q = normalize(query.trim());
   if (!q) return [];
-  const local = POIS.filter((p) => {
+  const local = CTX.pois.filter((p) => {
     const hay = normalize(
       [L(p.name), p.name.es, p.name.en, L(p.tag), L(p.desc)].join(' '),
     );
@@ -155,4 +160,37 @@ export function formatTime(iso, lang) {
   } catch {
     return '';
   }
+}
+
+/** Send a guest request to reception. Returns the stored request. */
+export async function submitRequest(payload) {
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...payload, roomToken: CTX.roomToken || undefined }),
+  });
+  const data = await res.json();
+  if (!res.ok || !data?.request) throw new Error(data?.error || 'request failed');
+  return data.request;
+}
+
+/** Current status of the guest's own requests. */
+export async function fetchRequests(ids) {
+  if (!ids.length) return [];
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests?ids=${encodeURIComponent(ids.join(','))}`);
+  const data = await res.json();
+  return data?.requests ?? [];
+}
+
+/** Load the hotel configuration for a slug ("default" = first hotel). */
+export async function loadConfig(slug) {
+  const res = await fetch(`/api/h/${encodeURIComponent(slug || 'default')}/config`);
+  if (!res.ok) throw new Error(`config ${res.status}`);
+  return res.json();
+}
+
+/** Identify a room from its QR token. */
+export async function loadRoom(slug, token) {
+  const res = await fetch(`/api/h/${encodeURIComponent(slug || 'default')}/room/${encodeURIComponent(token)}`);
+  return res.ok ? res.json() : null;
 }

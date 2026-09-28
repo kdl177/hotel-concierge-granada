@@ -4,6 +4,7 @@ import { createBrowserViteConfig } from '../../build/vite.js';
 import { localProviderPlugins } from '../providers/local.js';
 import { apiNotFoundPlugin } from './api-not-found.js';
 import { googleRoutesProxy } from '../providers/googleRoutes.js';
+import { conciergeApiPlugin } from '../app/vitePlugin.js';
 
 const root = fileURLToPath(new URL('../../', import.meta.url));
 
@@ -13,12 +14,26 @@ export default defineConfig(({ command, mode }) => {
   for (const [key, value] of Object.entries(loaded)) {
     if (process.env[key] === undefined) process.env[key] = value;
   }
-  return createBrowserViteConfig({
-    plugins: [...localProviderPlugins(), googleRoutesProxy(), apiNotFoundPlugin()],
+  const config = createBrowserViteConfig({
+    plugins: [...localProviderPlugins(), googleRoutesProxy(), conciergeApiPlugin(), apiNotFoundPlugin()],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     host: process.env.HOST,
-    port: process.env.PORT,
+    port: process.env.PORT || 4180,
     command,
   });
+  config.build = {
+    ...config.build,
+    target: 'es2022',
+    rollupOptions: {
+      input: {
+        index: fileURLToPath(new URL('../../index.html', import.meta.url)),
+        reception: fileURLToPath(new URL('../../reception.html', import.meta.url)),
+        admin: fileURLToPath(new URL('../../admin.html', import.meta.url)),
+        console: fileURLToPath(new URL('../../console.html', import.meta.url)),
+      },
+    },
+  };
+  config.preview = { host: process.env.HOST || 'localhost', port: parseInt(process.env.PORT, 10) || 4180 };
+  return config;
 });

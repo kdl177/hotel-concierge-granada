@@ -38,8 +38,27 @@ export async function createGlobe({
 
   const viewer = createApplicationViewer({ container, creditContainer });
   const { scene } = viewer;
+  const lowEnd =
+    window.matchMedia('(max-width: 899px)').matches ||
+    (navigator.hardwareConcurrency || 8) <= 4 ||
+    (navigator.deviceMemory || 8) <= 4;
+
+  // Render only when something changed (camera, data, animation) instead of
+  // 60 fps forever: the single biggest CPU/GPU saver for a mostly static map.
+  scene.requestRenderMode = true;
+  scene.maximumRenderTimeChange = Infinity;
+  viewer.targetFrameRate = lowEnd ? 30 : 60;
+  viewer.useBrowserRecommendedResolution = true;
+  viewer.resolutionScale = lowEnd ? 0.85 : 1;
+  scene.msaaSamples = lowEnd ? 1 : 2;
+  scene.postProcessStages.fxaa.enabled = !lowEnd;
+  scene.skyAtmosphere.show = !lowEnd;
+  scene.fog.enabled = true;
+  scene.globe.enableLighting = false;
   scene.screenSpaceCameraController.enableCollisionDetection = true;
   scene.screenSpaceCameraController.minimumZoomDistance = 40;
+  scene.screenSpaceCameraController.inertiaSpin = 0.7;
+  scene.screenSpaceCameraController.inertiaTranslate = 0.7;
 
   onStatus('tiles');
   const { tileset, route } = await loadPhotorealisticTileset(Cesium, {
@@ -47,6 +66,13 @@ export async function createGlobe({
     cesiumToken,
   });
   if (tileset) {
+    // Coarser tiles on phones: far fewer requests and triangles.
+    tileset.maximumScreenSpaceError = lowEnd ? 28 : 16;
+    tileset.cacheBytes = lowEnd ? 256 * 1024 * 1024 : 768 * 1024 * 1024;
+    tileset.skipLevelOfDetail = true;
+    tileset.dynamicScreenSpaceError = true;
+    tileset.dynamicScreenSpaceErrorFactor = lowEnd ? 8 : 4;
+    tileset.foveatedScreenSpaceError = true;
     scene.primitives.add(tileset);
   } else {
     // Keyless fallback: OpenStreetMap on the ellipsoid.
@@ -54,8 +80,11 @@ export async function createGlobe({
     viewer.imageryLayers.addImageryProvider(
       new Cesium.OpenStreetMapImageryProvider({
         url: 'https://tile.openstreetmap.org/',
+        maximumLevel: 19,
       }),
     );
+    scene.globe.maximumScreenSpaceError = lowEnd ? 3 : 2;
+    scene.globe.tileCacheSize = lowEnd ? 60 : 120;
   }
 
   const markers = viewer.entities;
@@ -74,6 +103,7 @@ export async function createGlobe({
     : Cesium.HeightReference.CLAMP_TO_GROUND;
 
   function addMarker({ id, lat, lon, label, kind = 'poi' }) {
+    scene.requestRender();
     return markers.add({
       id: `marker:${id}`,
       position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
@@ -120,6 +150,7 @@ export async function createGlobe({
     for (const entity of [...markers.values]) {
       if (entity.properties?.kind?.getValue() === kind) markers.remove(entity);
     }
+    scene.requestRender();
   }
 
   function clearRoute() {
@@ -141,14 +172,7 @@ export async function createGlobe({
           positions: Cesium.Cartesian3.fromDegreesArray(flat),
           width: seg.mode === 'WALK' ? 6 : 9,
           clampToGround: true,
-          material:
-            seg.mode === 'WALK'
-              ? new Cesium.PolylineDashMaterialProperty({ color, dashLength: 14 })
-              : new Cesium.PolylineOutlineMaterialProperty({
-                  color,
-                  outlineColor: Cesium.Color.fromCssColorString('rgba(0,0,0,.6)'),
-                  outlineWidth: 2,
-                }),
+          material: seg.mode === 'WALK' ? color.withAlpha(0.85) : color,
         },
       });
     }
@@ -210,6 +234,7 @@ export async function createGlobe({
     onPick,
     viewer,
     Cesium,
+    lowEnd,
     tilesRoute: route,
     addMarker,
     removeMarkers,

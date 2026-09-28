@@ -78,12 +78,6 @@ export function decodePolyline(str = '') {
   return out;
 }
 
-function latLon(ll) {
-  return ll && finite(ll.latitude) && finite(ll.longitude)
-    ? { lat: ll.latitude, lon: ll.longitude }
-    : null;
-}
-
 function seconds(duration) {
   // "123s" → 123
   const m = /^(\d+)s$/.exec(String(duration ?? ''));
@@ -120,8 +114,6 @@ export function shapeTransitRoutes(payload) {
             agency: line.agencies?.[0]?.name || '',
             from: td.stopDetails?.departureStop?.name || '',
             to: td.stopDetails?.arrivalStop?.name || '',
-            fromLoc: latLon(td.stopDetails?.departureStop?.location?.latLng),
-            toLoc: latLon(td.stopDetails?.arrivalStop?.location?.latLng),
             departure: dep,
             arrival: arr,
             stopCount: td.stopCount ?? 0,

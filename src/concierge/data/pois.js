@@ -7,6 +7,10 @@
 export const POIS = [
   {
     id: 'alhambra',
+    actions: [
+      { icon: 'confirmation_number', url: 'https://tickets.alhambra-patronato.es/', label: { es: 'Reservar entrada oficial', en: 'Book official tickets', fr: 'Réserver billets officiels', de: 'Offizielle Tickets buchen' } },
+      { icon: 'support_agent', request: 'tickets', label: { es: 'Que recepción la gestione', en: 'Let reception arrange it', fr: 'Laisser la réception s’en charger', de: 'Rezeption organisieren lassen' } },
+    ],
     cat: 'monument',
     lat: 37.1761, lon: -3.5881,
     minutes: 180, best: ['morning', 'afternoon'], priority: 10,
@@ -27,6 +31,9 @@ export const POIS = [
   },
   {
     id: 'generalife',
+    actions: [
+      { icon: 'confirmation_number', url: 'https://tickets.alhambra-patronato.es/', label: { es: 'Reservar entrada (Alhambra)', en: 'Book tickets (Alhambra)', fr: 'Réserver (Alhambra)', de: 'Tickets (Alhambra)' } },
+    ],
     cat: 'garden',
     lat: 37.1778, lon: -3.5843,
     minutes: 60, best: ['morning', 'afternoon'], priority: 7,
@@ -42,6 +49,9 @@ export const POIS = [
   },
   {
     id: 'san-nicolas',
+    actions: [
+      { icon: 'directions_bus', mode: 'transit', label: { es: 'Ver minibús C31/C32', en: 'See minibus C31/C32', fr: 'Voir minibus C31/C32', de: 'Minibus C31/C32 zeigen' } },
+    ],
     cat: 'viewpoint',
     lat: 37.1810, lon: -3.5925,
     minutes: 40, best: ['evening'], priority: 9,
@@ -72,6 +82,10 @@ export const POIS = [
   },
   {
     id: 'sacromonte',
+    actions: [
+      { icon: 'music_note', request: 'flamenco', label: { es: 'Reservar flamenco en cueva', en: 'Book cave flamenco', fr: 'Réserver flamenco en grotte', de: 'Höhlen-Flamenco buchen' } },
+      { icon: 'museum', url: 'https://www.sacromontegranada.com/', label: { es: 'Museo Cuevas del Sacromonte', en: 'Sacromonte Caves Museum', fr: 'Musée des grottes', de: 'Höhlenmuseum' } },
+    ],
     cat: 'neighbourhood',
     lat: 37.1826, lon: -3.5822,
     minutes: 120, best: ['afternoon', 'night'], priority: 7,
@@ -87,6 +101,9 @@ export const POIS = [
   },
   {
     id: 'catedral',
+    actions: [
+      { icon: 'confirmation_number', url: 'https://catedraldegranada.com/', label: { es: 'Entradas Catedral', en: 'Cathedral tickets', fr: 'Billets cathédrale', de: 'Kathedrale Tickets' } },
+    ],
     cat: 'monument',
     lat: 37.1763, lon: -3.5993,
     minutes: 60, best: ['morning', 'afternoon'], priority: 8,
@@ -102,6 +119,9 @@ export const POIS = [
   },
   {
     id: 'capilla-real',
+    actions: [
+      { icon: 'confirmation_number', url: 'https://capillarealgranada.com/', label: { es: 'Entradas Capilla Real', en: 'Royal Chapel tickets', fr: 'Billets Chapelle Royale', de: 'Tickets Königliche Kapelle' } },
+    ],
     cat: 'monument',
     lat: 37.1757, lon: -3.5988,
     minutes: 45, best: ['morning', 'afternoon'], priority: 6,
@@ -207,6 +227,9 @@ export const POIS = [
   },
   {
     id: 'parque-ciencias',
+    actions: [
+      { icon: 'confirmation_number', url: 'https://www.parqueciencias.com/', label: { es: 'Entradas y horarios', en: 'Tickets & hours', fr: 'Billets et horaires', de: 'Tickets & Zeiten' } },
+    ],
     cat: 'family',
     lat: 37.1633, lon: -3.6058,
     minutes: 150, best: ['morning', 'afternoon'], priority: 6,
@@ -237,6 +260,10 @@ export const POIS = [
   },
   {
     id: 'sierra-nevada',
+    actions: [
+      { icon: 'directions_bus', url: 'https://www.alsa.es/', label: { es: 'Horarios de autobús (ALSA)', en: 'Bus times (ALSA)', fr: 'Horaires de bus (ALSA)', de: 'Busfahrplan (ALSA)' } },
+      { icon: 'downhill_skiing', url: 'https://sierranevada.es/', label: { es: 'Estación de esquí', en: 'Ski resort', fr: 'Station de ski', de: 'Skigebiet' } },
+    ],
     cat: 'nature',
     lat: 37.0945, lon: -3.3970,
     minutes: 360, best: ['morning'], priority: 5,

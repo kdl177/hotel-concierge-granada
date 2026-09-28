@@ -128,3 +128,20 @@ export const HOTEL_SERVICES = [
     hours: { es: '', en: '', fr: '', de: '' },
   },
 ];
+
+/**
+ * Quick actions the guest can trigger from the Tasks panel. `tel` dials a
+ * number; `mail` opens an email; `url` opens a page. Reception handles the
+ * request when no dedicated channel exists.
+ */
+export const HOTEL_ACTIONS = [
+  { id: 'spa', icon: 'spa', fields: ['when', 'people', 'details'], name: { es: 'Reservar spa / masaje', en: 'Book spa / massage', fr: 'Réserver spa / massage', de: 'Spa / Massage buchen' } },
+  { id: 'table', icon: 'restaurant', fields: ['when', 'people', 'details'], name: { es: 'Reservar mesa en el gastrobar', en: 'Book a table at the gastrobar', fr: 'Réserver une table au gastrobar', de: 'Tisch im Gastrobar reservieren' } },
+  { id: 'breakfast', icon: 'egg_alt', fields: ['when', 'people', 'details'], name: { es: 'Desayuno en la habitación', en: 'Breakfast in your room', fr: 'Petit-déjeuner en chambre', de: 'Frühstück aufs Zimmer' } },
+  { id: 'taxi', icon: 'local_taxi', fields: ['when', 'destination', 'people'], tel: '+34 958 28 06 54', sub: { es: 'Radio Taxi Granada', en: 'Radio Taxi Granada', fr: 'Radio Taxi Granada', de: 'Radio Taxi Granada' }, name: { es: 'Pedir un taxi', en: 'Call a taxi', fr: 'Appeler un taxi', de: 'Taxi rufen' } },
+  { id: 'latecheckout', icon: 'schedule', fields: ['when', 'details'], name: { es: 'Pedir late check-out', en: 'Request late check-out', fr: 'Demander un départ tardif', de: 'Late Check-out anfragen' } },
+  { id: 'housekeeping', icon: 'cleaning_services', fields: ['details'], name: { es: 'Toallas / limpieza', en: 'Towels / housekeeping', fr: 'Serviettes / ménage', de: 'Handtücher / Zimmerservice' } },
+  { id: 'parking', icon: 'local_parking', fields: ['when', 'details'], name: { es: 'Plaza de parking', en: 'Parking space', fr: 'Place de parking', de: 'Parkplatz' } },
+  { id: 'flamenco', icon: 'music_note', fields: ['when', 'people', 'details'], name: { es: 'Reservar espectáculo flamenco', en: 'Book a flamenco show', fr: 'Réserver un spectacle de flamenco', de: 'Flamenco-Show buchen' } },
+  { id: 'reception', icon: 'support_agent', tel: HOTEL.phone, name: { es: 'Hablar con recepción', en: 'Talk to reception', fr: 'Parler à la réception', de: 'Mit der Rezeption sprechen' } },
+];

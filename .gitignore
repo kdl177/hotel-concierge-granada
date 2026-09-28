@@ -19,3 +19,10 @@ output/
 3d-models/
 pinokio/ENVIRONMENT
 pinokio/.installed
+
+# Guest requests store (local)
+data/concierge-requests.json
+data/concierge-requests.json.tmp
+
+# Concierge database
+data/concierge.sqlite*
