@@ -32,8 +32,8 @@ await loadLabels();
 function shell() {
   root.innerHTML = `
     <header class="bar">
-      <div class="brand">${icon('hotel')}<div><b>${esc(state.hotel?.name || 'Concierge')}</b><div class="muted">Recepción</div></div></div>
-      ${state.hotels.length > 1 ? `<select data-hotel class="sel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
+      <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Recepción</div></div></div>
+      ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <nav class="tabs">
         <button data-tab="inbox" class="${state.tab === 'inbox' ? 'on' : ''}">${icon('inbox')} Solicitudes <span class="pill" data-pending></span></button>
         <button data-tab="chats" class="${state.tab === 'chats' ? 'on' : ''}">${icon('forum')} Chat <span class="pill" data-chat-unread>${state.chatUnread || ''}</span></button>
@@ -126,7 +126,7 @@ function renderCards() {
           ${r.status !== 'done' ? `<button class="btn" data-status="done">${icon('task_alt')} Hecha</button>` : ''}
           ${r.status === 'pending' ? `<button class="btn no" data-status="rejected">${icon('block')} No disponible</button>` : ''}
           ${r.status !== 'pending' ? `<button class="btn" data-status="pending">${icon('undo')} Reabrir</button>` : ''}
-          <select class="sel" data-assign><option value="">Sin asignar</option>${state.users.map((u) => `<option value="${u.id}" ${u.id === r.assignedTo ? 'selected' : ''}>${esc(u.name || u.email)}</option>`).join('')}</select>
+          <select class="sel" data-assign aria-label="Asignar a"><option value="">Sin asignar</option>${state.users.map((u) => `<option value="${u.id}" ${u.id === r.assignedTo ? 'selected' : ''}>${esc(u.name || u.email)}</option>`).join('')}</select>
           <button class="btn" data-note>${icon('sms')} Nota</button>
           ${r.guestKey ? `<button class="btn" data-chat="${esc(r.guestKey)}">${icon('forum')} Chat</button>` : ''}
           <button class="btn" data-history>${icon('history')} ${open ? 'Ocultar' : 'Historial'}</button>
@@ -223,7 +223,7 @@ async function refresh() {
 function renderStays(main) {
   main.innerHTML = `
     <div class="toolbar"><button class="btn primary" data-checkin>${icon('login')} Nuevo check-in</button><span class="muted">Al hacer check-in, el QR de la habitación identifica al huésped y sus solicitudes quedan ligadas a la estancia.</span></div>
-    <table class="table"><thead><tr><th>Hab.</th><th>Huésped</th><th>Pers.</th><th>Idioma</th><th>Entrada</th><th>Salida</th><th>Estado</th><th></th></tr></thead>
+    <table class="table"><thead><tr><th>Hab.</th><th>Huésped</th><th>Pers.</th><th>Idioma</th><th>Entrada</th><th>Salida</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
     <tbody data-stays><tr><td colspan="8" class="muted">Cargando…</td></tr></tbody></table>`;
   main.querySelector('[data-checkin]').addEventListener('click', async () => {
     const v = await modal({ title: 'Check-in', body: `
@@ -344,7 +344,7 @@ async function refreshChat() {
           : '<p class="muted">Ninguna.</p>'}</aside>
       </div>
       <form class="chat-form" data-chat-form>
-        <select class="sel">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
+        <select class="sel" aria-label="Asunto del mensaje">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
         <textarea rows="2" placeholder="Escribe al huésped… (Enter envía, Mayús+Enter salto de línea)">${esc(draft)}</textarea>
         <button class="btn primary" type="submit">${icon('send')} Enviar</button>
       </form>`;

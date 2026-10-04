@@ -1,5 +1,5 @@
 /** Hotel admin panel: hotel data, services, quick actions, places, rooms (QR), users, hotels (superadmin). */
-import { api, esc, icon, fmt, confirmDialog, errorText, requireLogin, accountButton, bindAccount, toast, modal, setHotelOverride, ROLE_LABEL, TYPE_LABEL } from './common.js';
+import { api, esc, icon, iconField, fmt, confirmDialog, errorText, requireLogin, accountButton, bindAccount, toast, modal, setHotelOverride, ROLE_LABEL, TYPE_LABEL } from './common.js';
 import { renderStats } from './stats.js';
 
 const LANGS = ['es', 'en', 'fr', 'de'];
@@ -43,8 +43,8 @@ const TABS = [
 function shell() {
   root.innerHTML = `
     <header class="bar">
-      <div class="brand">${icon('hotel')}<div><b>${esc(state.hotel?.name || 'Concierge')}</b><div class="muted">Administración</div></div></div>
-      ${state.hotels.length > 1 ? `<select data-hotel class="sel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
+      <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Administración</div></div></div>
+      ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
       <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
     </header>
@@ -146,11 +146,11 @@ document.addEventListener('click', (e) => {
 // ---------- tabs ----------
 async function load() {
   const m = main();
-  m.innerHTML = '<p class="muted">Cargando…</p>';
+  m.innerHTML = '<div class="boot" aria-busy="true"><span class="spinner" aria-hidden="true"></span><span>Cargando…</span></div>';
   try {
-    if (state.tab === 'hotel') return renderHotel(m);
-    if (state.tab === 'stats') return renderStats(m, { hotel: state.hotel });
-    if (state.tab === 'hotels') return renderHotels(m);
+    if (state.tab === 'hotel') return await renderHotel(m);
+    if (state.tab === 'stats') return await renderStats(m, { hotel: state.hotel });
+    if (state.tab === 'hotels') return await renderHotels(m);
     const { items } = await api(`/admin/${state.tab}`);
     state.items = items;
     if (state.tab === 'services') return renderServices(m);
@@ -159,8 +159,9 @@ async function load() {
     if (state.tab === 'rooms') return renderRooms(m);
     if (state.tab === 'users') return renderUsers(m);
   } catch (err) {
-    if (err.status === 401) return location.reload();
-    m.innerHTML = `<p class="err">${esc(err.message)}</p>`;
+    if (err.status === 401 || err.status === 403 && /password change/.test(err.message)) return location.reload();
+    m.innerHTML = `<div class="state-error" role="alert">${icon('cloud_off')}<div><b>No se pudo cargar esta sección</b><p class="muted">${esc(errorText(err))}</p></div><button class="btn" data-retry>${icon('refresh')} Reintentar</button></div>`;
+    m.querySelector('[data-retry]').addEventListener('click', load);
   }
 }
 
@@ -205,7 +206,7 @@ async function paintTransit(box, reload = false) {
     const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
     box.classList.remove('muted');
     box.innerHTML = feeds.length
-      ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th></th></tr></thead><tbody>${feeds
+      ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th>Estado</th></tr></thead><tbody>${feeds
           .map((f) => {
             const st = f.validTo < today ? '<span class="badge rejected">Caducado</span>' : f.validTo < soon ? '<span class="badge pending">Renovar pronto</span>' : '<span class="badge confirmed">Al día</span>';
             return `<tr><td><b>${esc(f.agencies.join(', '))}</b><div class="muted small">${esc(f.file)}</div></td><td>${f.trips.toLocaleString('es-ES')}</td><td>${f.stops}</td><td>${esc(fmtD(f.validTo))}</td><td>${st}</td></tr>`;
@@ -223,10 +224,10 @@ async function paintTransit(box, reload = false) {
 
 function listPage(m, { title, help, columns, rows, onNew }) {
   m.innerHTML = `<div class="toolbar"><h2>${esc(title)}</h2><button class="btn primary" data-new>${icon('add')} Nuevo</button></div>${help ? `<p class="muted">${help}</p>` : ''}
-    <table class="table"><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}<th></th></tr></thead><tbody>${rows.join('') || `<tr><td colspan="${columns.length + 1}" class="muted">Nada todavía.</td></tr>`}</tbody></table>`;
+    <table class="table"><thead><tr>${columns.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}<th scope="col"><span class="sr-only">Acciones</span></th></tr></thead><tbody>${rows.join('') || `<tr class="empty-row"><td colspan="${columns.length + 1}" class="muted">Todavía no hay nada aquí. Pulsa <b>Nuevo</b> para crear el primero.</td></tr>`}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', onNew);
 }
-const rowBtns = (id, extra = '') => `<td class="right">${extra}<button class="btn sm" data-edit="${esc(id)}" aria-label="Editar" title="Editar">${icon('edit')}</button><button class="btn sm no" data-del="${esc(id)}" aria-label="Eliminar" title="Eliminar">${icon('delete')}</button></td>`;
+const rowBtns = (id, extra = '', { canDelete = true } = {}) => `<td class="right">${extra}<button class="btn sm" data-edit="${esc(id)}" aria-label="Editar" title="Editar">${icon('edit')}</button>${canDelete ? `<button class="btn sm no" data-del="${esc(id)}" aria-label="Eliminar" title="Eliminar">${icon('delete')}</button>` : ''}</td>`;
 function bindRows(m, { onEdit, onDelete }) {
   m.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => onEdit(state.items.find((x) => x.id === b.dataset.edit))));
   m.querySelectorAll('[data-del]').forEach((b) =>
@@ -268,7 +269,7 @@ async function editService(s) {
   const v = await modal({
     wide: true,
     title: s ? 'Editar servicio' : 'Nuevo servicio',
-    body: `<div class="row"><label>Icono (Material Symbols)<input name="icon" value="${esc(s?.icon || 'room_service')}" /></label><label>Categoría${select('category', SERVICE_CATS, s?.category || 'leisure')}</label><label>Orden<input name="sort" type="number" value="${s?.sort ?? 0}" /></label></div>
+    body: `<div class="row">${iconField('icon', s?.icon || 'room_service')}<label>Categoría${select('category', SERVICE_CATS, s?.category || 'leisure')}</label><label>Orden<input name="sort" type="number" value="${s?.sort ?? 0}" /></label></div>
       <h4>Nombre</h4>${i18nInputs('name', s?.name)}<h4>Descripción</h4>${i18nInputs('desc', s?.desc, { textarea: true })}<h4>Horario (texto)</h4>${i18nInputs('hours', s?.hours)}
       <h4>Horario semanal para “Abierto ahora” (opcional)</h4><div class="row"><label>Desde<input name="from" type="time" value="${esc(open?.from || '')}" /></label><label>Hasta<input name="to" type="time" value="${esc(open?.to || '')}" /></label></div>
       ${checks('days', ['1', '2', '3', '4', '5', '6', '0'], (open?.days || []).map(String), { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' })}
@@ -296,7 +297,7 @@ async function editAction(a) {
   const v = await modal({
     wide: true,
     title: a ? 'Editar acción' : 'Nueva acción',
-    body: `<div class="row"><label>Clave (tipo de solicitud)<input name="key" value="${esc(a?.key || '')}" placeholder="spa, taxi, table…" /></label><label>Icono<input name="icon" value="${esc(a?.icon || 'support_agent')}" /></label><label>Orden<input name="sort" type="number" value="${a?.sort ?? 0}" /></label></div>
+    body: `<div class="row"><label>Clave (tipo de solicitud)<input name="key" value="${esc(a?.key || '')}" placeholder="spa, taxi, table…" /></label>${iconField('icon', a?.icon || 'support_agent')}<label>Orden<input name="sort" type="number" value="${a?.sort ?? 0}" /></label></div>
       <h4>Nombre</h4>${i18nInputs('name', a?.name)}<h4>Subtítulo (opcional)</h4>${i18nInputs('sub', a?.sub)}
       <h4>Campos del formulario</h4>${checks('fields', FIELDS, a?.fields || [], { when: 'Fecha/hora', people: 'Personas', destination: 'Destino', details: 'Detalles' })}
       <div class="row"><label>Teléfono (si no hay campos: llamada directa)<input name="tel" value="${esc(a?.tel || '')}" /></label><label class="chk"><input type="checkbox" name="active" ${a?.active ?? true ? 'checked' : ''}/> Activa</label></div>`,
@@ -387,7 +388,7 @@ function renderUsers(m) {
       const me = u.id === state.user.id;
       const status = !u.active ? '<span class="badge rejected">Desactivado</span>' : u.mustChangePassword ? '<span class="badge pending">Contraseña temporal</span>' : '<span class="badge done">Activo</span>';
       const extra = me ? '' : `<button class="btn sm" data-signout="${esc(u.id)}" aria-label="Cerrar sus sesiones" title="Cerrar todas sus sesiones">${icon('devices')}</button>`;
-      return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="muted">(tú)</span>' : ''}</td><td>${esc(u.email)}</td><td>${esc(ROLE_LABEL[u.role] || u.role)}</td><td>${status}</td><td>${u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="muted">Nunca</span>'}</td>${rowBtns(u.id, extra)}</tr>`;
+      return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="muted">(tú)</span>' : ''}</td><td>${esc(u.email)}</td><td>${esc(ROLE_LABEL[u.role] || u.role)}</td><td>${status}</td><td>${u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="muted">Nunca</span>'}</td>${rowBtns(u.id, extra, { canDelete: !me })}</tr>`;
     }),
     onNew: () => editUser(null),
   });
@@ -410,7 +411,7 @@ async function renderHotels(m) {
   const { hotels } = await api('/super/hotels');
   state.hotels = hotels;
   m.innerHTML = `<div class="toolbar"><h2>Hoteles</h2><button class="btn primary" data-new>${icon('add')} Nuevo hotel</button></div>
-    <table class="table"><thead><tr><th>Nombre</th><th>Slug</th><th>Ciudad</th><th>Pendientes</th><th>Activo</th><th></th></tr></thead><tbody>
+    <table class="table"><thead><tr><th>Nombre</th><th>Slug</th><th>Ciudad</th><th>Pendientes</th><th>Activo</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>
     ${hotels.map((h) => `<tr><td><b>${esc(h.name)}</b></td><td><code>${esc(h.slug)}</code></td><td>${esc(h.city)}</td><td>${h.pending}</td><td>${h.active ? '✔' : '—'}</td><td class="right"><a class="btn sm" target="_blank" href="/?h=${esc(h.slug)}">${icon('open_in_new')} App</a><button class="btn sm" data-toggle="${h.id}" data-active="${h.active ? 1 : 0}">${h.active ? 'Desactivar' : 'Activar'}</button></td></tr>`).join('')}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', async () => {
     const v = await modal({ title: 'Nuevo hotel', body: `<div class="row"><label>Nombre<input name="name" required /></label><label>Slug (URL)<input name="slug" required placeholder="hotel-sol-malaga" /></label></div>

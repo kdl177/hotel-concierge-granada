@@ -1,9 +1,10 @@
+import { glyph, PICKER_ICONS } from '../design/icons.js';
 /** Shared helpers for the reception and admin screens. */
 // Icon ligatures stay hidden until the symbol font loads (offline: shown after 3 s).
-document.fonts?.load('20px "Material Symbols Rounded"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
+document.fonts?.load('20px "Concierge Symbols"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
 setTimeout(() => document.body.classList.add('icons-ready'), 3000);
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-export const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${/^[a-z0-9_]{1,40}$/.test(String(name)) ? name : 'help'}</span>`;
+export const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
 export const fmt = (iso) => {
   if (!iso) return '';
   const d = new Date(iso.includes('T') || iso.includes(' ') ? iso.replace(' ', 'T') + (iso.endsWith('Z') || iso.includes('+') ? '' : 'Z') : iso);
@@ -152,7 +153,7 @@ export async function requireLogin(root, title) {
   try {
     me = await api('/auth/me');
   } catch {}
-  if (!me) {
+  if (!me?.user) {
     me = await new Promise((resolve) => {
       const show = () => {
         root.innerHTML = authCard(title, `
@@ -299,3 +300,13 @@ export function modal({ title, body, submit = 'Guardar', wide = false, onOpen })
     form.querySelector('input, textarea, select')?.focus();
   });
 }
+
+/** Icon field with a searchable list of the icons available in the app, and a live preview. */
+export function iconField(name, value, label = 'Icono') {
+  return `<label>${esc(label)}<span class="icon-field"><span class="icon-preview" data-icon-preview>${icon(value)}</span><input name="${esc(name)}" value="${esc(value)}" list="icon-list" autocomplete="off" pattern="[a-z0-9_]{1,40}" /></span></label>
+    <datalist id="icon-list">${PICKER_ICONS.map((n) => `<option value="${n}"></option>`).join('')}</datalist>`;
+}
+document.addEventListener('input', (e) => {
+  const input = e.target.closest?.('.icon-field input');
+  if (input) input.parentElement.querySelector('[data-icon-preview]').innerHTML = icon(input.value.trim());
+});

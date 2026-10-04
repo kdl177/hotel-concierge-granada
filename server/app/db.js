@@ -160,7 +160,7 @@ export function requestRow(r) {
 }
 
 /** Insert the first hotel from the bundled config files when the DB is empty. */
-export function seedIfEmpty(db, { hotel, services, actions, pois }) {
+export function seedIfEmpty(db, { hotel, services, actions, pois, sampleRooms = true }) {
   const count = db.prepare('SELECT COUNT(*) AS n FROM hotels').get().n;
   if (count > 0) return null;
   const hotelId = uid();
@@ -176,7 +176,10 @@ export function seedIfEmpty(db, { hotel, services, actions, pois }) {
   const insP = db.prepare(`INSERT INTO pois (id, hotel_id, sort, key, cat, lat, lon, minutes, best_json, priority, name_json, tag_json, desc_json, tasks_json, actions_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   pois.forEach((p, i) => insP.run(uid(), hotelId, i, p.id, p.cat, p.lat, p.lon, p.minutes, J(p.best), p.priority, J(p.name), J(p.tag), J(p.desc), J(p.tasks), J(p.actions ?? [])));
   db.prepare(`UPDATE pois SET indoor = 1 WHERE hotel_id = ? AND key IN (${INDOOR_KEYS.map(() => '?').join(',')})`).run(hotelId, ...INDOOR_KEYS);
-  const insR = db.prepare(`INSERT INTO rooms (id, hotel_id, number, token, floor) VALUES (?,?,?,?,?)`);
-  for (const n of ['101', '102', '103', '201', '202', '203', '301', '302']) insR.run(uid(), hotelId, n, token(), n[0]);
+  // Demo rooms only outside production: real room numbers are created in Admin → Habitaciones.
+  if (sampleRooms) {
+    const insR = db.prepare(`INSERT INTO rooms (id, hotel_id, number, token, floor) VALUES (?,?,?,?,?)`);
+    for (const n of ['101', '102', '103', '201', '202', '203', '301', '302']) insR.run(uid(), hotelId, n, token(), n[0]);
+  }
   return hotelId;
 }

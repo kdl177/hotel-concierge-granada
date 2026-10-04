@@ -16,7 +16,7 @@ export function createConciergeApp({ env = process.env, mailer, fetchImpl } = {}
   const dbFile = env.CONCIERGE_DB || path.resolve(process.cwd(), 'data/concierge.sqlite');
   const db = openDatabase(dbFile);
 
-  const seeded = seedIfEmpty(db, { hotel: HOTEL, services: HOTEL_SERVICES, actions: HOTEL_ACTIONS, pois: POIS });
+  const seeded = seedIfEmpty(db, { hotel: HOTEL, services: HOTEL_SERVICES, actions: HOTEL_ACTIONS, pois: POIS, sampleRooms: env.NODE_ENV !== 'production' });
   if (seeded) console.log(`[concierge] seeded first hotel "${HOTEL.name}" (slug ${HOTEL.id}) into ${dbFile}`);
 
   // One-time fix: early seeds placed the Gran Hotel Luna ~350 m off. Only rows

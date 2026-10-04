@@ -237,7 +237,8 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
   });
   app.get('/auth/me', (req, res) => {
     const user = currentUser(req);
-    if (!user) return res.status(401).json({ error: 'auth required' });
+    // "Not signed in" is a normal state for the login screen, not an error.
+    if (!user) return res.json({ user: null });
     const hotel = user.hotel_id ? hotelById.get(user.hotel_id) : null;
     res.json({ user: publicUser(user), hotel: hotel && hotelPublic(hotel) });
   });

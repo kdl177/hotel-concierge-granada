@@ -49,6 +49,8 @@ export function createWeather({ fetchImpl = (...a) => fetch(...a) } = {}) {
     const hit = cache.get(h.id);
     if (hit?.data && Date.now() - hit.at < TTL_MS) return hit.data;
     if (hit?.pending) return hit.pending;
+    // After a failure, wait before asking the upstream again (no retry storm).
+    if (!hit?.data && hit?.failedAt && Date.now() - hit.failedAt < 120_000) throw new Error('weather unavailable (cooling down)');
     const url = new URL('https://api.open-meteo.com/v1/forecast');
     url.search = new URLSearchParams({
       latitude: h.lat.toFixed(4),
@@ -69,7 +71,7 @@ export function createWeather({ fetchImpl = (...a) => fetch(...a) } = {}) {
         cache.set(h.id, { at: Date.now(), data });
         return data;
       } catch (error) {
-        cache.set(h.id, { at: hit?.at || 0, data: hit?.data || null });
+        cache.set(h.id, { at: hit?.at || 0, data: hit?.data || null, failedAt: Date.now() });
         if (hit?.data) return hit.data; // stale beats nothing
         throw error;
       } finally {
@@ -88,7 +90,9 @@ export function createWeather({ fetchImpl = (...a) => fetch(...a) } = {}) {
         res.setHeader('Cache-Control', 'public, max-age=300');
         res.json(await forHotel(h));
       } catch {
-        res.status(503).json({ error: 'weather unavailable' });
+        // Optional widget: answer 200 so the guest app simply hides it (no console error).
+        res.setHeader('Cache-Control', 'public, max-age=120');
+        res.json({ available: false });
       }
     });
   }

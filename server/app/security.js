@@ -54,7 +54,7 @@ export const clientIp = (req) => req.ip || req.socket?.remoteAddress || 'unknown
 
 /**
  * Security headers for every response. The CSP allows what the 3D globe needs
- * (Cesium workers/wasm, Google/OSM/Cesium ion tiles, Google Fonts) and nothing
+ * (Cesium workers/wasm, Google/OSM/Cesium ion tiles); fonts are self-hosted and nothing
  * else executes: no inline scripts, no eval, no framing.
  */
 export function securityHeaders({ production = false } = {}) {
@@ -62,8 +62,8 @@ export function securityHeaders({ production = false } = {}) {
     "default-src 'self'",
     "script-src 'self' 'wasm-unsafe-eval' blob:",
     "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
     "img-src 'self' data: blob: https:",
     "connect-src 'self' data: blob: https:",
     "media-src 'self' blob: https:",
