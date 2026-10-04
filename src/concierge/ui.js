@@ -30,8 +30,9 @@ import {
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-const icon = (name, cls = '') => `<span class="msym ${cls}" aria-hidden="true">${name}</span>`;
-const telHref = (n) => `tel:${String(n).replace(/\s/g, '')}`;
+// Icon names are ligatures of the symbol font: only [a-z0-9_] ever reaches the DOM.
+const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${/^[a-z0-9_]{1,40}$/.test(String(name)) ? name : 'help'}</span>`;
+const telHref = (n) => `tel:${String(n ?? '').replace(/[^0-9+]/g, '')}`;
 
 const VEHICLE_ICON = { BUS: 'directions_bus', SUBWAY: 'subway', TRAM: 'tram', LIGHT_RAIL: 'tram', RAIL: 'train', HEAVY_RAIL: 'train', METRO_RAIL: 'subway' };
 const SNAPS = ['collapsed', 'half', 'full'];
@@ -165,7 +166,7 @@ export function createUi({ root, globe, config, room = null }) {
   function poiCard(p, { wide = false } = {}) {
     const cat = POI_CATEGORIES[p.cat] || { icon: 'place' };
     const d = distanceFromHotelM(p);
-    return `<button class="cg-card ${wide ? 'wide' : ''} ${p.photo ? 'has-photo' : ''}" data-action="open-poi" data-id="${p.id}">
+    return `<button class="cg-card ${wide ? 'wide' : ''} ${p.photo ? 'has-photo' : ''}" data-action="open-poi" data-id="${esc(p.id)}">
       ${p.photo ? `<img class="cg-card-photo" src="${esc(p.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(cat?.icon || 'place')}</div>`}
       <div class="cg-card-body">
         <div class="cg-card-title">${esc(L(p.name))}</div>
@@ -250,7 +251,7 @@ export function createUi({ root, globe, config, room = null }) {
       <div class="cg-row">${suggested.map((p) => poiCard(p)).join('')}</div>
       <h3>${esc(t('hotel'))} ${openNow.length ? `<span class="cg-moment">· ${esc(t('openNow'))}</span>` : ''}</h3>
       <div class="cg-chips">
-        ${openNow.map((s) => `<button class="cg-chip" data-action="open-service" data-id="${s.id}">${icon(s.icon)} ${esc(L(s.name))}</button>`).join('')}
+        ${openNow.map((s) => `<button class="cg-chip" data-action="open-service" data-id="${esc(s.id)}">${icon(s.icon)} ${esc(L(s.name))}</button>`).join('')}
         <button class="cg-chip accent" data-action="open-hotel">${icon('room_service')} ${esc(t('all'))}</button>
       </div>
       <h3>${esc(t('explore'))}</h3>
@@ -296,10 +297,10 @@ export function createUi({ root, globe, config, room = null }) {
 
   function actionButton(a, poi) {
     const label = esc(L(a.label));
-    if (a.url) return `<a class="cg-act" target="_blank" rel="noopener" href="${esc(a.url)}">${icon(a.icon || 'open_in_new')}<span>${label}</span>${icon('open_in_new', 'cg-act-ext')}</a>`;
+    if (a.url && /^https?:\/\//i.test(a.url)) return `<a class="cg-act" target="_blank" rel="noopener noreferrer" href="${esc(a.url)}">${icon(a.icon || 'open_in_new')}<span>${label}</span>${icon('open_in_new', 'cg-act-ext')}</a>`;
     if (a.request) return `<button class="cg-act" data-action="request" data-type="${esc(a.request)}" data-preset="${esc(a.request === 'tickets' ? `${t('ticketsVia')} ${L(poi.name)}` : L(poi.name))}">${icon(a.icon || 'support_agent')}<span>${label}</span></button>`;
     if (a.tel) return `<a class="cg-act" href="${telHref(HOTEL.phone)}">${icon(a.icon || 'call')}<span>${label}</span><small>${esc(HOTEL.phone)}</small></a>`;
-    if (a.mode) return `<button class="cg-act" data-action="open-poi-mode" data-id="${poi.id}" data-mode="${a.mode}">${icon(a.icon || 'directions')}<span>${label}</span></button>`;
+    if (a.mode) return `<button class="cg-act" data-action="open-poi-mode" data-id="${esc(poi.id)}" data-mode="${esc(a.mode)}">${icon(a.icon || 'directions')}<span>${label}</span></button>`;
     return '';
   }
 
@@ -355,7 +356,7 @@ export function createUi({ root, globe, config, room = null }) {
           (list) => `<div class="cg-list">${list
             .map((s) => {
               const open = isOpenNow(s);
-              return `<button class="cg-card wide" data-action="open-service" data-id="${s.id}">
+              return `<button class="cg-card wide" data-action="open-service" data-id="${esc(s.id)}">
                 ${s.photo ? `<img class="cg-card-photo" src="${esc(s.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(s.icon)}</div>`}
                 <div class="cg-card-body"><div class="cg-card-title">${esc(L(s.name))}</div>
                 <div class="cg-card-meta">${open === null ? esc(L(s.hours)) : `<span class="cg-dot ${open ? 'open' : 'closed'}"></span>${esc(open ? t('openNow') : t('closedNow'))} · ${esc(L(s.hours))}`}</div></div>
@@ -412,7 +413,7 @@ export function createUi({ root, globe, config, room = null }) {
               const done = tasks.filter((_, i) => state.done.has(`${p.id}:${i}`)).length;
               return `<section class="cg-plan-item">
                 <div class="cg-plan-top">
-                  <button class="cg-plan-title" data-action="open-poi" data-id="${p.id}">${icon(POI_CATEGORIES[p.cat]?.icon || 'place')}<b>${esc(L(p.name))}</b></button>
+                  <button class="cg-plan-title" data-action="open-poi" data-id="${esc(p.id)}">${icon(POI_CATEGORIES[p.cat]?.icon || 'place')}<b>${esc(L(p.name))}</b></button>
                   <span class="cg-muted">${esc(t('doneCount', { d: done, n: tasks.length }))}</span>
                   <button class="cg-x" data-action="toggle-plan" data-id="${p.id}" title="${esc(t('removeFromPlan'))}">${icon('close')}</button>
                 </div>
@@ -459,7 +460,7 @@ export function createUi({ root, globe, config, room = null }) {
               ? `<label>${icon('schedule')}<input name="when" type="datetime-local" /></label>`
               : k === 'people'
                 ? `<label>${icon('group')}<input name="people" type="number" min="1" max="20" placeholder="${esc(t('people'))}" /></label>`
-                : `<label class="cg-form-full">${icon(FIELD_ICON[k] || 'edit')}<input name="${k}" placeholder="${esc(t(k))}" /></label>`,
+                : `<label class="cg-form-full">${icon(FIELD_ICON[k] || 'edit')}<input name="${esc(k)}" placeholder="${esc(t(k))}" /></label>`,
         )
         .join('')}
       <div class="cg-form-msg" data-role="form-msg"></div>

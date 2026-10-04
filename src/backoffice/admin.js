@@ -1,5 +1,5 @@
 /** Hotel admin panel: hotel data, services, quick actions, places, rooms (QR), users, hotels (superadmin). */
-import { api, esc, icon, requireLogin, toast, modal, setHotelOverride, ROLE_LABEL, TYPE_LABEL } from './common.js';
+import { api, esc, icon, fmt, confirmDialog, errorText, requireLogin, accountButton, bindAccount, toast, modal, setHotelOverride, ROLE_LABEL, TYPE_LABEL } from './common.js';
 import { renderStats } from './stats.js';
 
 const LANGS = ['es', 'en', 'fr', 'de'];
@@ -46,7 +46,7 @@ function shell() {
       <div class="brand">${icon('hotel')}<div><b>${esc(state.hotel?.name || 'Concierge')}</b><div class="muted">Administración</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
-      <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a><button class="btn sm" data-logout>${icon('logout')}</button></div>
+      <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
     </header>
     <main id="main"></main>`;
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
@@ -56,10 +56,7 @@ function shell() {
     shell();
     load();
   });
-  root.querySelector('[data-logout]').addEventListener('click', async () => {
-    await api('/auth/logout', { method: 'POST' });
-    location.reload();
-  });
+  bindAccount(root, state.user);
   root.querySelectorAll('[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {
       state.tab = b.dataset.tab;
@@ -211,7 +208,7 @@ async function paintTransit(box, reload = false) {
       ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th></th></tr></thead><tbody>${feeds
           .map((f) => {
             const st = f.validTo < today ? '<span class="badge rejected">Caducado</span>' : f.validTo < soon ? '<span class="badge pending">Renovar pronto</span>' : '<span class="badge confirmed">Al día</span>';
-            return `<tr><td><b>${esc(f.agencies.join(', '))}</b><div class="muted small">${esc(f.file)}</div></td><td>${f.trips.toLocaleString('es-ES')}</td><td>${f.stops}</td><td>${fmtD(f.validTo)}</td><td>${st}</td></tr>`;
+            return `<tr><td><b>${esc(f.agencies.join(', '))}</b><div class="muted small">${esc(f.file)}</div></td><td>${f.trips.toLocaleString('es-ES')}</td><td>${f.stops}</td><td>${esc(fmtD(f.validTo))}</td><td>${st}</td></tr>`;
           })
           .join('')}</tbody></table><p class="muted small">Para actualizar: descarga el nuevo .zip en nap.transportes.gob.es, déjalo en <code>${esc(dir)}</code> (borra el antiguo) y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`
       : `<p class="muted">No hay horarios cargados. Deja los .zip GTFS en <code>${esc(dir)}</code> y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`;
@@ -229,13 +226,18 @@ function listPage(m, { title, help, columns, rows, onNew }) {
     <table class="table"><thead><tr>${columns.map((c) => `<th>${esc(c)}</th>`).join('')}<th></th></tr></thead><tbody>${rows.join('') || `<tr><td colspan="${columns.length + 1}" class="muted">Nada todavía.</td></tr>`}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', onNew);
 }
-const rowBtns = (id, extra = '') => `<td class="right">${extra}<button class="btn sm" data-edit="${id}">${icon('edit')}</button><button class="btn sm no" data-del="${id}">${icon('delete')}</button></td>`;
+const rowBtns = (id, extra = '') => `<td class="right">${extra}<button class="btn sm" data-edit="${esc(id)}" aria-label="Editar" title="Editar">${icon('edit')}</button><button class="btn sm no" data-del="${esc(id)}" aria-label="Eliminar" title="Eliminar">${icon('delete')}</button></td>`;
 function bindRows(m, { onEdit, onDelete }) {
   m.querySelectorAll('[data-edit]').forEach((b) => b.addEventListener('click', () => onEdit(state.items.find((x) => x.id === b.dataset.edit))));
   m.querySelectorAll('[data-del]').forEach((b) =>
     b.addEventListener('click', async () => {
-      if (!confirm('¿Eliminar?')) return;
-      await onDelete(b.dataset.del);
+      if (!(await confirmDialog('¿Eliminar este elemento? No se puede deshacer.', 'Eliminar'))) return;
+      try {
+        await onDelete(b.dataset.del);
+        toast('Eliminado');
+      } catch (err) {
+        toast(errorText(err), 'err');
+      }
       load();
     }),
   );
@@ -246,7 +248,7 @@ async function save(table, item, body) {
     toast('Guardado');
     load();
   } catch (err) {
-    toast(err.message, 'err');
+    toast(errorText(err), 'err');
   }
 }
 
@@ -380,14 +382,25 @@ function renderUsers(m) {
   listPage(m, {
     title: 'Usuarios del hotel',
     help: 'Administrador: todo. Recepción: solicitudes y estancias. Personal: solo solicitudes.',
-    columns: ['Nombre', 'Email', 'Rol', 'Activo'],
-    rows: state.items.map((u) => `<tr><td><b>${esc(u.name)}</b></td><td>${esc(u.email)}</td><td>${esc(ROLE_LABEL[u.role] || u.role)}</td><td>${u.active ? '✔' : '—'}</td>${rowBtns(u.id)}</tr>`),
+    columns: ['Nombre', 'Email', 'Rol', 'Estado', 'Último acceso'],
+    rows: state.items.map((u) => {
+      const me = u.id === state.user.id;
+      const status = !u.active ? '<span class="badge rejected">Desactivado</span>' : u.mustChangePassword ? '<span class="badge pending">Contraseña temporal</span>' : '<span class="badge done">Activo</span>';
+      const extra = me ? '' : `<button class="btn sm" data-signout="${esc(u.id)}" aria-label="Cerrar sus sesiones" title="Cerrar todas sus sesiones">${icon('devices')}</button>`;
+      return `<tr><td><b>${esc(u.name || '—')}</b>${me ? ' <span class="muted">(tú)</span>' : ''}</td><td>${esc(u.email)}</td><td>${esc(ROLE_LABEL[u.role] || u.role)}</td><td>${status}</td><td>${u.lastLoginAt ? esc(fmt(u.lastLoginAt)) : '<span class="muted">Nunca</span>'}</td>${rowBtns(u.id, extra)}</tr>`;
+    }),
     onNew: () => editUser(null),
   });
   bindRows(m, { onEdit: editUser, onDelete: (id) => api(`/admin/users/${id}`, { method: 'DELETE' }) });
+  m.querySelectorAll('[data-signout]').forEach((b) =>
+    b.addEventListener('click', async () => {
+      if (!(await confirmDialog('Se cerrará la sesión de este usuario en todos sus dispositivos.', 'Cerrar sesiones'))) return;
+      await api(`/admin/users/${b.dataset.signout}`, { method: 'PUT', body: { signOut: true } }).then(() => toast('Sesiones cerradas'), (e) => toast(errorText(e), 'err'));
+    }),
+  );
 }
 async function editUser(u) {
-  const v = await modal({ title: u ? 'Editar usuario' : 'Nuevo usuario', body: `<label>Nombre<input name="name" value="${esc(u?.name || '')}" /></label>${u ? '' : '<label>Email<input name="email" type="email" required /></label>'}<label>Rol${select('role', ['admin', 'reception', 'staff'], u?.role || 'reception', ROLE_LABEL)}</label><label>${u ? 'Nueva contraseña (vacío = no cambiar)' : 'Contraseña (mín. 8)'}<input name="password" type="password" ${u ? '' : 'required minlength="8"'} /></label>${u ? `<label class="chk"><input type="checkbox" name="active" ${u.active ? 'checked' : ''}/> Activo</label>` : ''}` });
+  const v = await modal({ title: u ? 'Editar usuario' : 'Nuevo usuario', body: `<label>Nombre<input name="name" value="${esc(u?.name || '')}" /></label>${u ? '' : '<label>Email<input name="email" type="email" required /></label>'}<label>Rol${select('role', ['admin', 'reception', 'staff'], u?.role || 'reception', ROLE_LABEL)}</label><label>${u ? 'Contraseña temporal nueva (vacío = no cambiar)' : 'Contraseña temporal'}<input name="password" type="password" autocomplete="new-password" minlength="10" ${u ? '' : 'required'} /></label><p class="hint">Mínimo 10 caracteres, con letras y números. El usuario deberá cambiarla al entrar.</p>${u ? `<label class="chk"><input type="checkbox" name="active" ${u.active ? 'checked' : ''}/> Activo</label>` : ''}` });
   if (!v) return;
   save('users', u, { ...v, active: u ? !!v.active : true, password: v.password || undefined });
 }
@@ -403,7 +416,7 @@ async function renderHotels(m) {
     const v = await modal({ title: 'Nuevo hotel', body: `<div class="row"><label>Nombre<input name="name" required /></label><label>Slug (URL)<input name="slug" required placeholder="hotel-sol-malaga" /></label></div>
       <div class="row"><label>Ciudad<input name="city" /></label><label>Teléfono<input name="phone" /></label></div><label>Dirección<input name="address" /></label>
       <div class="row"><label>Latitud<input name="lat" type="number" step="0.000001" /></label><label>Longitud<input name="lon" type="number" step="0.000001" /></label></div>
-      <h4>Administrador del hotel</h4><div class="row"><label>Nombre<input name="adminName" /></label><label>Email<input name="adminEmail" type="email" /></label><label>Contraseña<input name="adminPassword" type="password" minlength="8" /></label></div>` });
+      <h4>Administrador del hotel</h4><div class="row"><label>Nombre<input name="adminName" /></label><label>Email<input name="adminEmail" type="email" /></label><label>Contraseña temporal<input name="adminPassword" type="password" minlength="10" autocomplete="new-password" /></label></div>` });
     if (!v) return;
     try {
       await api('/super/hotels', { method: 'POST', body: { ...v, lat: num(v.lat, 37.1773), lon: num(v.lon, -3.5986) } });

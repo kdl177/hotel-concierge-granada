@@ -185,7 +185,7 @@ export async function submitRequest(payload) {
 /** Current status of the guest's own requests. */
 export async function fetchRequests(ids) {
   if (!ids.length) return [];
-  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests?ids=${encodeURIComponent(ids.join(','))}`);
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests?ids=${encodeURIComponent(ids.join(','))}&key=${guestKey()}`);
   const data = await res.json();
   return data?.requests ?? [];
 }

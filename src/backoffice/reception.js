@@ -1,5 +1,5 @@
 /** Reception screen: live request inbox, assignment, notes, history, stays. */
-import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, toast, beep, modal, setHotelOverride } from './common.js';
+import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, accountButton, bindAccount, toast, beep, modal, setHotelOverride } from './common.js';
 
 const root = document.getElementById('app');
 const state = { user: null, hotel: null, hotels: [], tab: 'inbox', filter: 'open', q: '', requests: [], counts: {}, users: [], stays: [], known: null, expanded: new Set(), events: new Map(), chats: [], chatUnread: 0, chatKey: null, chat: null, chatLastSeen: null };
@@ -41,7 +41,7 @@ function shell() {
       </nav>
       <div class="me"><span>${esc(state.user.name || state.user.email)}</span>
         ${['admin', 'superadmin'].includes(state.user.role) ? `<a class="btn sm" href="/admin.html">${icon('settings')} Admin</a>` : ''}
-        <button class="btn sm" data-logout>${icon('logout')}</button></div>
+        ${accountButton(state.user)}</div>
     </header>
     <main id="main"></main>`;
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
@@ -55,10 +55,7 @@ function shell() {
       refresh();
     });
   });
-  root.querySelector('[data-logout]').addEventListener('click', async () => {
-    await api('/auth/logout', { method: 'POST' });
-    location.reload();
-  });
+  bindAccount(root, state.user);
   root.querySelectorAll('[data-tab]').forEach((b) =>
     b.addEventListener('click', () => {
       state.tab = b.dataset.tab;
@@ -114,7 +111,7 @@ function renderCards() {
     .map((r) => {
       const open = state.expanded.has(r.id);
       const ev = state.events.get(r.id);
-      return `<article class="card ${r.status}" data-id="${r.id}">
+      return `<article class="card ${esc(r.status)}" data-id="${esc(r.id)}">
         <div class="top">
           <span class="room">${esc(r.room)}</span>
           <div class="who"><b>${esc(TYPE_LABEL[r.type] || r.type)}</b>${r.name ? `<div class="muted">${esc(r.name)}</div>` : ''}</div>
@@ -253,7 +250,7 @@ async function refreshStays() {
   body.innerHTML = stays.length
     ? stays
         .map(
-          (s) => `<tr class="${s.status}"><td><b>${esc(s.room || '—')}</b></td><td>${esc(s.guestName)}</td><td>${s.guests}</td><td>${esc(s.lang.toUpperCase())}</td><td>${esc(s.checkin || '')}</td><td>${esc(s.checkout || '')}</td>
+          (s) => `<tr class="${s.status}"><td><b>${esc(s.room || '—')}</b></td><td>${esc(s.guestName)}</td><td>${Number(s.guests) || 1}</td><td>${esc(s.lang.toUpperCase())}</td><td>${esc(s.checkin || '')}</td><td>${esc(s.checkout || '')}</td>
             <td><span class="badge ${s.status === 'active' ? 'confirmed' : 'done'}">${s.status === 'active' ? 'Activa' : s.status === 'closed' ? 'Cerrada' : 'Próxima'}</span></td>
             <td class="right">${s.status === 'active' ? `<button class="btn sm" data-checkout="${s.id}">${icon('logout')} Check-out</button>` : ''}
               ${s.roomToken ? `<a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel.slug)}&r=${encodeURIComponent(s.roomToken)}">${icon('qr_code')} App</a>` : ''}</td></tr>`,
