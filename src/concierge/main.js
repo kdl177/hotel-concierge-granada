@@ -5,7 +5,7 @@ import { loadConfig, loadRoom, setContext } from './services.js';
 
 document.documentElement.lang = getLang();
 // Hide icon ligature words until the symbol font is in; show them even if it never loads (offline kiosk).
-document.fonts?.load('24px "Material Symbols Rounded"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
+document.fonts?.load('24px "Concierge Symbols"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
 setTimeout(() => document.body.classList.add('icons-ready'), 3000);
 const loader = document.getElementById('cg-loading');
 const status = loader.querySelector('.status');
