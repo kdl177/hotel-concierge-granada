@@ -46,7 +46,10 @@
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
     "start": "vite build && node server/app/main.js",
-    "serve": "node server/app/main.js"
+    "serve": "node server/app/main.js",
+    "reset-password": "node scripts/reset-password.mjs",
+    "test:concierge": "node --test test/concierge/",
+    "test:e2e:concierge": "node test/e2e/run.mjs"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
