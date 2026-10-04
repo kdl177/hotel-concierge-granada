@@ -104,6 +104,7 @@ export async function createGlobe({
 
   function addMarker({ id, lat, lon, label, kind = 'poi' }) {
     scene.requestRender();
+    markers.removeById(`marker:${id}`); // idempotent: a transfer stop can appear twice
     return markers.add({
       id: `marker:${id}`,
       position: Cesium.Cartesian3.fromDegrees(lon, lat, 0),
@@ -179,55 +180,142 @@ export async function createGlobe({
     scene.requestRender();
   }
 
-  function flyTo({ lat, lon, height = 700, heading = 20, pitch = -40, duration = 1.8 }) {
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-      orientation: {
-        heading: Cesium.Math.toRadians(heading),
-        pitch: Cesium.Math.toRadians(pitch),
-        roll: 0,
-      },
+  // ---------- ground height ----------
+  // Google 3D tiles sit at real elevation (Granada ≈ 700 m above sea level),
+  // so every camera target must be placed on the ground, not at height 0.
+  const heightCache = new Map();
+  let baseHeight = 0;
+  const cartoKey = (lat, lon) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+  async function groundHeight(lat, lon) {
+    const key = cartoKey(lat, lon);
+    if (heightCache.has(key)) return heightCache.get(key);
+    let h = null;
+    try {
+      if (tileset && scene.sampleHeightSupported) {
+        const [c] = await Promise.race([
+          scene.sampleHeightMostDetailed([Cesium.Cartographic.fromDegrees(lon, lat)], routeExclusions()),
+          new Promise((r) => setTimeout(() => r([null]), 2500)),
+        ]);
+        if (c && Number.isFinite(c.height)) h = c.height;
+      } else if (scene.globe.show) {
+        const g = scene.globe.getHeight(Cesium.Cartographic.fromDegrees(lon, lat));
+        if (Number.isFinite(g)) h = g;
+      }
+    } catch {}
+    if (h === null) return baseHeight; // not cached: retry once tiles are loaded
+    heightCache.set(key, h);
+    return h;
+  }
+  // Don't let our own route lines / markers be mistaken for the ground.
+  function routeExclusions() {
+    return [...routeSource.entities.values, ...guideSource.entities.values, ...markers.values];
+  }
+  async function calibrate(lat, lon) {
+    const h = await groundHeight(lat, lon);
+    if (h) baseHeight = h;
+    return h;
+  }
+
+  // ---------- camera ----------
+  let flightToken = 0;
+  /** Centre `target` on screen, seen from `heading`/`pitch` at `range` metres. */
+  async function lookAt({ lat, lon, heading = 0, pitch = -40, range = 600, duration = 1.4 }) {
+    const token = ++flightToken;
+    const h = await groundHeight(lat, lon);
+    if (token !== flightToken) return; // a newer request superseded this one
+    viewer.camera.cancelFlight();
+    viewer.camera.flyToBoundingSphere(new Cesium.BoundingSphere(Cesium.Cartesian3.fromDegrees(lon, lat, h), 1), {
+      offset: new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), Cesium.Math.toRadians(pitch), range),
       duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
     });
   }
 
-  /** Frame two points (e.g. hotel and destination). */
-  function flyToBounds(points, { padding = 1.35, duration = 1.8 } = {}) {
-    const lats = points.map((p) => p.lat);
-    const lons = points.map((p) => p.lon);
-    const rect = Cesium.Rectangle.fromDegrees(
-      Math.min(...lons), Math.min(...lats), Math.max(...lons), Math.max(...lats),
-    );
-    const center = Cesium.Rectangle.center(rect);
-    const spanM = Math.max(
-      Cesium.Rectangle.computeWidth(rect) * 6371000,
-      Cesium.Rectangle.computeHeight(rect) * 6371000,
-      400,
-    );
-    viewer.camera.flyTo({
-      destination: Cesium.Cartesian3.fromRadians(
-        center.longitude,
-        center.latitude - Cesium.Math.toRadians(spanM / 6371000 / 2.4),
-        spanM * padding,
-      ),
-      orientation: {
-        heading: 0,
-        pitch: Cesium.Math.toRadians(-52),
-        roll: 0,
-      },
+  /** Kept for callers: interpret `height` as viewing distance around the point. */
+  function flyTo({ lat, lon, height = 900, heading = 20, pitch = -40, duration = 1.8 }) {
+    return lookAt({ lat, lon, heading, pitch, range: height, duration });
+  }
+
+  /** Frame a set of points (hotel + destination, or a whole route). */
+  async function flyToBounds(points, { duration = 1.6, pitch = -55 } = {}) {
+    const pts = points.filter((p) => Number.isFinite(p?.lat) && Number.isFinite(p?.lon));
+    if (!pts.length) return;
+    const token = ++flightToken;
+    const h = await groundHeight(pts[0].lat, pts[0].lon);
+    if (token !== flightToken) return;
+    const sphere = Cesium.BoundingSphere.fromPoints(pts.map((p) => Cesium.Cartesian3.fromDegrees(p.lon, p.lat, h)));
+    const range = Math.max(450, sphere.radius * (lowEnd ? 3.4 : 3));
+    viewer.camera.cancelFlight();
+    viewer.camera.flyToBoundingSphere(sphere, {
+      offset: new Cesium.HeadingPitchRange(0, Cesium.Math.toRadians(pitch), range),
       duration,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_IN_OUT,
     });
   }
 
-  function setHome({ lat, lon, height, heading, pitch }) {
-    viewer.camera.setView({
-      destination: Cesium.Cartesian3.fromDegrees(lon, lat, height),
-      orientation: {
-        heading: Cesium.Math.toRadians(heading),
-        pitch: Cesium.Math.toRadians(pitch),
-        roll: 0,
-      },
+  /** Frame a drawn route by its geometry (all vertices), not just its ends. */
+  function flyToRoute(coords, extra = []) {
+    const step = Math.max(1, Math.floor(coords.length / 60));
+    const pts = coords.filter((_, i) => i % step === 0).map(([lon, lat]) => ({ lat, lon }));
+    return flyToBounds([...pts, ...extra]);
+  }
+
+  async function setHome({ lat, lon, height = 900, heading = 35, pitch = -38 }) {
+    const h = await calibrate(lat, lon);
+    const center = Cesium.Cartesian3.fromDegrees(lon, lat, h);
+    viewer.camera.lookAt(center, new Cesium.HeadingPitchRange(Cesium.Math.toRadians(heading), Cesium.Math.toRadians(pitch), height));
+    viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY); // release the lock so the user can move freely
+  }
+
+  // ---------- step-by-step guide on the map ----------
+  const guideSource = new Cesium.CustomDataSource('guide');
+  viewer.dataSources.add(guideSource);
+  const pointClamp = tileset ? Cesium.HeightReference.CLAMP_TO_3D_TILE : Cesium.HeightReference.CLAMP_TO_GROUND;
+
+  /** Numbered dots for every step; `current` is enlarged and its segment highlighted. */
+  function showGuide(steps, current) {
+    guideSource.entities.removeAll();
+    steps.forEach((s, i) => {
+      const isCur = i === current;
+      const done = i < current;
+      guideSource.entities.add({
+        position: Cesium.Cartesian3.fromDegrees(s.lon, s.lat),
+        point: {
+          pixelSize: isCur ? 26 : 16,
+          color: Cesium.Color.fromCssColorString(isCur ? '#f5b642' : done ? '#6b7280' : '#4cc3ff'),
+          outlineColor: Cesium.Color.fromCssColorString('#0b1020'),
+          outlineWidth: 3,
+          heightReference: pointClamp,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+        label: {
+          text: String(i + 1),
+          font: `700 ${isCur ? 14 : 11}px Inter, sans-serif`,
+          fillColor: Cesium.Color.fromCssColorString('#0b1020'),
+          heightReference: pointClamp,
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          verticalOrigin: Cesium.VerticalOrigin.CENTER,
+          horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+        },
+      });
     });
+    const seg = steps[current]?.seg;
+    if (seg?.length > 1) {
+      guideSource.entities.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(seg.flatMap(([lon, lat]) => [lon, lat])),
+          width: 12,
+          clampToGround: true,
+          material: Cesium.Color.fromCssColorString('#f5b642'),
+          zIndex: 10,
+        },
+      });
+    }
+    scene.requestRender();
+  }
+  function clearGuide() {
+    guideSource.entities.removeAll();
+    scene.requestRender();
   }
 
   const api = {
@@ -242,8 +330,13 @@ export async function createGlobe({
     drawRoute,
     clearRoute,
     flyTo,
+    lookAt,
     flyToBounds,
+    flyToRoute,
     setHome,
+    showGuide,
+    clearGuide,
+    groundHeight,
   };
   return api;
 }

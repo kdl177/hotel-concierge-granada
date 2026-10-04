@@ -10,10 +10,9 @@ export const HOTEL = {
   address: 'Plaza del Guitarrista Manuel Cano, 2 · 18004 Granada',
   phone: '+34 958 28 29 13',
   email: 'reservaslunagranada@delunahotels.com',
-  // TODO verificar con el hotel: coordenadas aproximadas de la Plaza del
-  // Guitarrista Manuel Cano (esquina Arabial / Camino de Ronda).
-  lat: 37.1737,
-  lon: -3.6095,
+  // Plaza del Guitarrista Manuel Cano 2 (esquina Arabial) — 1,2 km de la Catedral.
+  lat: 37.17654,
+  lon: -3.612782,
   // Camera used for the welcome view (metres above ground, degrees).
   welcomeView: { height: 900, heading: 35, pitch: -38 },
   wifi: { note: { es: 'Wi-Fi gratuito en todo el hotel', en: 'Free Wi-Fi throughout the hotel', fr: 'Wi-Fi gratuit dans tout l’hôtel', de: 'Kostenloses WLAN im gesamten Hotel' } },

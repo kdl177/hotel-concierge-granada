@@ -22,6 +22,10 @@ import {
   formatTime,
   submitRequest,
   fetchRequests,
+  fetchChat,
+  sendChat,
+  fetchWeather,
+  track,
 } from './services.js';
 
 const esc = (s) =>
@@ -49,12 +53,15 @@ export function createUi({ root, globe, config, room = null }) {
     searchTimer: null,
     searchResults: null,
     tick: null,
+    guideTimer: null,
     guide: null, // { steps: [{lat,lon,text}], i }
     done: loadSet('concierge.done'),
     plan: loadSet('concierge.plan'),
     requestForm: null, // { type, title, fields, preset }
     requests: loadList('concierge.requests'), // [{id, type, status, ...}]
     requestsTick: null,
+    chat: { open: false, messages: [], lastId: 0, unread: 0, requestId: null, sending: false },
+    weather: null,
     guest: room ? { room: room.number, name: room.stay?.guestName || '' } : loadObj('concierge.guest'), // { room, name }
   };
 
@@ -158,8 +165,8 @@ export function createUi({ root, globe, config, room = null }) {
   function poiCard(p, { wide = false } = {}) {
     const cat = POI_CATEGORIES[p.cat] || { icon: 'place' };
     const d = distanceFromHotelM(p);
-    return `<button class="cg-card ${wide ? 'wide' : ''}" data-action="open-poi" data-id="${p.id}">
-      <div class="cg-card-icon">${icon(cat?.icon || 'place')}</div>
+    return `<button class="cg-card ${wide ? 'wide' : ''} ${p.photo ? 'has-photo' : ''}" data-action="open-poi" data-id="${p.id}">
+      ${p.photo ? `<img class="cg-card-photo" src="${esc(p.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(cat?.icon || 'place')}</div>`}
       <div class="cg-card-body">
         <div class="cg-card-title">${esc(L(p.name))}</div>
         <div class="cg-card-meta"><span class="cg-tag">${esc(L(p.tag))}</span> · ${esc(formatDistance(d, t))} · ${esc(formatDuration(p.minutes * 60, t))}</div>
@@ -168,14 +175,76 @@ export function createUi({ root, globe, config, room = null }) {
     </button>`;
   }
 
+
+  // ---------- weather ----------
+  const WX = (code, isDay = true) => {
+    if (code === 0) return ['clear', isDay ? 'sunny' : 'clear_night'];
+    if (code <= 2) return ['partly', isDay ? 'partly_cloudy_day' : 'partly_cloudy_night'];
+    if (code === 3) return ['cloudy', 'cloud'];
+    if (code === 45 || code === 48) return ['fog', 'foggy'];
+    if (code >= 51 && code <= 57) return ['drizzle', 'rainy_light'];
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ['rain', 'rainy'];
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['snow', 'weather_snowy'];
+    if (code >= 95) return ['storm', 'thunderstorm'];
+    return ['cloudy', 'cloud'];
+  };
+  function weatherHint(w) {
+    const f = w.flags || {};
+    if (f.rain) return ['umbrella', t('hintRain')];
+    if (f.hot && dayMoment() !== 'night') return ['device_thermostat', t('hintHot')];
+    if (f.golden) return ['wb_twilight', t('hintSunset', { t: hhmm(w.today.sunset) })];
+    if (f.cold) return ['ac_unit', t('hintCold')];
+    return ['directions_walk', t('hintNice')];
+  }
+  const hhmm = (localIso) => (localIso ? localIso.slice(11, 16) : '');
+  function weatherCard() {
+    const w = state.weather;
+    if (!w?.current) return '';
+    const [cond, ic] = WX(w.current.code, w.current.isDay);
+    const [hic, hint] = weatherHint(w);
+    const next = (w.hours || []).slice(1, 6);
+    return `<section class="cg-weather">
+      <div class="cg-wx-main">
+        ${icon(ic, 'cg-wx-ico')}
+        <div class="cg-wx-temp">${Math.round(w.current.temp)}°</div>
+        <div class="cg-wx-txt"><b>${esc(t('wx_' + cond))}</b><span>${esc(t('weatherNow', { city: HOTEL.city || '' }))} · ${Math.round(w.today.min)}° / ${Math.round(w.today.max)}°</span></div>
+      </div>
+      <div class="cg-wx-hours">${next
+        .map((h) => `<div><span>${esc(hhmm(h.time))}</span>${icon(WX(h.code, true)[1])}<b>${Math.round(h.temp)}°</b>${h.pop >= 30 ? `<small>${h.pop}%</small>` : ''}</div>`)
+        .join('')}
+        ${w.today.sunset ? `<div class="sun"><span>${esc(t('sunset'))}</span>${icon('wb_twilight')}<b>${esc(hhmm(w.today.sunset))}</b></div>` : ''}
+      </div>
+      <div class="cg-wx-hint">${icon(hic)} ${esc(hint)}</div>
+    </section>`;
+  }
+  /** Rank places for "now": time of day, then weather (rain → indoors, sunset → viewpoints). */
+  function suggestScore(p, moment) {
+    let s = p.priority + (p.best.includes(moment) ? 4 : -2);
+    const f = state.weather?.flags;
+    if (f) {
+      if (f.rain) s += p.indoor ? 7 : -5;
+      if (f.hot && (moment === 'afternoon' || moment === 'morning')) s += p.indoor ? 4 : -2;
+      if (f.cold) s += p.indoor ? 2 : 0;
+      if (f.golden && !f.rain) s += p.cat === 'viewpoint' ? 7 : p.cat === 'walk' ? 3 : 0;
+    }
+    return s;
+  }
+  async function refreshWeather() {
+    try {
+      state.weather = await fetchWeather();
+      if (state.view.name === 'home' && !panel.contains(document.activeElement)) render();
+    } catch {}
+  }
+
   function renderHome() {
     const moment = dayMoment();
-    const suggested = POIS.filter((p) => p.best.includes(moment)).sort((a, b) => b.priority - a.priority).slice(0, 5);
+    const suggested = [...POIS].map((p) => [p, suggestScore(p, moment)]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p]) => p);
     const nearby = [...POIS].sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b)).slice(0, 4);
     const openNow = HOTEL_SERVICES.filter((s) => isOpenNow(s) === true).slice(0, 4);
     const cats = Object.entries(POI_CATEGORIES).filter(([k]) => POIS.some((p) => p.cat === k));
     return `
       <div class="cg-hero"><h1>${esc(t('welcome'))}</h1><p>${esc(t('tagline'))}</p></div>
+      ${weatherCard()}
       ${searchBox()}
       <h3>${esc(t('suggestions'))} <span class="cg-moment">· ${esc(t(moment))}</span></h3>
       <div class="cg-row">${suggested.map((p) => poiCard(p)).join('')}</div>
@@ -255,8 +324,10 @@ export function createUi({ root, globe, config, room = null }) {
     const inPlan = v.poi && state.plan.has(v.poi.id);
     return `
       ${header(p.title, v.poi ? L(v.poi.tag) : v.place.address || '', v.poi ? `<button class="cg-plan-btn ${inPlan ? 'on' : ''}" data-action="toggle-plan" data-id="${v.poi.id}" title="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}">${icon(inPlan ? 'bookmark' : 'bookmark_add')}</button>` : '')}
+      ${v.poi?.photo ? `<img class="cg-hero-photo" src="${esc(v.poi.photo)}" alt="${esc(p.title)}" />` : ''}
       ${v.poi ? `<p class="cg-desc">${esc(L(v.poi.desc))}</p>` : ''}
       <div class="cg-facts">
+        ${v.poi?.indoor ? `<span>${icon('roofing')} <b>${esc(t('indoor'))}</b></span>` : ''}
         <span>${icon('hotel')} ${esc(t('fromHotel'))}: <b>${esc(formatDistance(d, t))}</b></span>
         ${v.poi ? `<span>${icon('schedule')} ${esc(t('visit'))}: <b>${esc(formatDuration(v.poi.minutes * 60, t))}</b></span>` : ''}
       </div>
@@ -285,7 +356,7 @@ export function createUi({ root, globe, config, room = null }) {
             .map((s) => {
               const open = isOpenNow(s);
               return `<button class="cg-card wide" data-action="open-service" data-id="${s.id}">
-                <div class="cg-card-icon">${icon(s.icon)}</div>
+                ${s.photo ? `<img class="cg-card-photo" src="${esc(s.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(s.icon)}</div>`}
                 <div class="cg-card-body"><div class="cg-card-title">${esc(L(s.name))}</div>
                 <div class="cg-card-meta">${open === null ? esc(L(s.hours)) : `<span class="cg-dot ${open ? 'open' : 'closed'}"></span>${esc(open ? t('openNow') : t('closedNow'))} · ${esc(L(s.hours))}`}</div></div>
                 ${icon('chevron_right', 'cg-chev')}
@@ -303,7 +374,7 @@ export function createUi({ root, globe, config, room = null }) {
     const open = isOpenNow(s);
     return `
       ${header(L(s.name), open === null ? '' : open ? t('openNow') : t('closedNow'))}
-      <div class="cg-service-icon">${icon(s.icon)}</div>
+      ${s.photo ? `<img class="cg-hero-photo" src="${esc(s.photo)}" alt="${esc(L(s.name))}" />` : `<div class="cg-service-icon">${icon(s.icon)}</div>`}
       <p class="cg-desc">${esc(L(s.desc))}</p>
       ${L(s.hours) ? `<div class="cg-facts"><span>${icon('schedule')} ${esc(t('hours'))}: <b>${esc(L(s.hours))}</b></span></div>` : ''}
       ${s.bookable ? `<a class="cg-btn" href="${telHref(HOTEL.phone)}">${icon('call')} ${esc(t('bookAtReception'))}</a>` : ''}
@@ -313,11 +384,17 @@ export function createUi({ root, globe, config, room = null }) {
 
   // ---------- tasks panel ----------
   function renderTasks() {
+    if (state.chat.open) return renderChat();
     const planPois = POIS.filter((p) => state.plan.has(p.id));
     const suggestions = POIS.filter((p) => !state.plan.has(p.id)).sort((a, b) => b.priority - a.priority).slice(0, 3);
     sidePanel.innerHTML = `
       <div class="cg-side-head"><h2>${esc(t('tasks'))}</h2><div class="cg-sub">${esc(HOTEL.name)}</div></div>
       ${state.requestForm ? renderRequestForm() : ''}
+      <button class="cg-chatcard" data-action="chat-open">
+        <span class="cg-chatcard-ico">${icon('forum')}${state.chat.unread ? `<i class="cg-badge">${state.chat.unread}</i>` : ''}</span>
+        <span class="cg-chatcard-body"><b>${esc(t('chatTitle'))}</b><small>${esc(lastChatPreview() || t('chatHint'))}</small></span>
+        ${icon('chevron_right', 'cg-chev')}
+      </button>
       <h3>${esc(t('quickActions'))}</h3>
       <div class="cg-grid">
         ${HOTEL_ACTIONS.map((a) =>
@@ -404,7 +481,8 @@ export function createUi({ root, globe, config, room = null }) {
             <div class="cg-card-icon">${icon(action?.icon || 'confirmation_number')}</div>
             <div class="cg-card-body"><div class="cg-card-title">${esc(title)}</div>
               <div class="cg-card-meta">${esc(t('room'))} ${esc(r.room)}${r.when ? ` · ${esc(fmtWhen(r.when))}` : ''}${r.note ? ` · ${esc(r.note)}` : ''}</div></div>
-            <span class="cg-status ${st}">${icon(STATUS_ICON[st])} ${esc(t('status' + st[0].toUpperCase() + st.slice(1)))}</span>
+            <div class="cg-req-side"><span class="cg-status ${st}">${icon(STATUS_ICON[st])} ${esc(t('status' + st[0].toUpperCase() + st.slice(1)))}</span>
+              <button class="cg-linkbtn sm" data-action="chat-open" data-request="${esc(r.id)}">${icon('chat')} ${esc(t('write'))}</button></div>
           </div>`;
         })
         .join('')}</div>`;
@@ -443,6 +521,119 @@ export function createUi({ root, globe, config, room = null }) {
   state.requestsTick = setInterval(pollRequests, 20000);
   pollRequests();
 
+
+  // ---------- chat with reception ----------
+  const requestTitle = (id) => {
+    const r = state.requests.find((x) => x.id === id);
+    if (!r) return '';
+    const a = HOTEL_ACTIONS.find((x) => x.key === r.type);
+    return a ? L(a.name) : r.details || r.type;
+  };
+  function lastChatPreview() {
+    const m = [...state.chat.messages].reverse().find((x) => x.author !== 'system');
+    return m ? `${m.author === 'guest' ? t('you') : t('reception')}: ${m.body}` : '';
+  }
+  function chatBubble(m) {
+    const time = new Date(m.at.replace(' ', 'T') + 'Z').toLocaleTimeString(getLang(), { hour: '2-digit', minute: '2-digit' });
+    if (m.author === 'system') {
+      const label = m.body === 'created' ? t('sysCreated') : t('sysStatus_' + m.body.split(':')[1]);
+      const title = requestTitle(m.requestId);
+      return `<div class="cg-msg sys">${icon(m.body === 'created' ? 'send' : 'info')} ${esc(label)}${title ? ` · <b>${esc(title)}</b>` : ''} <span>${esc(time)}</span></div>`;
+    }
+    const mine = m.author === 'guest';
+    return `<div class="cg-msg ${mine ? 'me' : 'them'}">
+      ${!mine ? `<div class="cg-msg-who">${esc(m.staffName || t('reception'))}</div>` : ''}
+      ${m.requestId && requestTitle(m.requestId) ? `<div class="cg-msg-ref">${icon('reply')} ${esc(requestTitle(m.requestId))}</div>` : ''}
+      <div class="cg-msg-body">${esc(m.body)}</div><div class="cg-msg-time">${esc(time)}</div></div>`;
+  }
+  function renderChat() {
+    const c = state.chat;
+    sidePanel.innerHTML = `
+      <div class="cg-head"><button class="cg-back" data-action="chat-close">${icon('arrow_back')}</button>
+        <div class="cg-head-text"><h2>${esc(t('chatTitle'))}</h2><div class="cg-sub">${esc(HOTEL.name)}</div></div></div>
+      <div class="cg-chat" data-role="chat-list">${c.messages.length ? c.messages.map(chatBubble).join('') : `<p class="cg-muted">${esc(t('chatEmpty'))}</p>`}</div>
+      <form class="cg-chat-form" data-role="chat-form">
+        ${c.requestId && requestTitle(c.requestId) ? `<div class="cg-chat-ctx">${icon('reply')} ${esc(t('about'))} <b>${esc(requestTitle(c.requestId))}</b><button type="button" class="cg-x" data-action="chat-ctx-clear">${icon('close')}</button></div>` : ''}
+        <div class="cg-chat-row"><textarea name="body" rows="1" maxlength="1000" placeholder="${esc(t('chatPlaceholder'))}"></textarea>
+        <button class="cg-send" type="submit" aria-label="${esc(t('send'))}">${icon('send')}</button></div>
+      </form>`;
+    const list = sidePanel.querySelector('[data-role="chat-list"]');
+    list.scrollTop = list.scrollHeight;
+  }
+  function appendMessages(msgs) {
+    const c = state.chat;
+    const known = new Set(c.messages.map((m) => m.id));
+    const fresh = msgs.filter((m) => !known.has(m.id));
+    if (!fresh.length) return [];
+    c.messages.push(...fresh);
+    c.lastId = Math.max(c.lastId, ...fresh.map((m) => m.id));
+    return fresh;
+  }
+  async function pollChat() {
+    const c = state.chat;
+    try {
+      const visible = c.open && (state.tab === 'tasks' || window.matchMedia('(min-width: 900px)').matches);
+      const { messages, unread } = await fetchChat(c.lastId, visible);
+      const fresh = appendMessages(messages);
+      const incoming = fresh.filter((m) => m.author !== 'guest');
+      c.unread = visible ? 0 : unread;
+      if (incoming.length && !visible && c.lastId && incoming.some((m) => m.author === 'staff' || m.body.startsWith('status:'))) {
+        showToast(t('chatReply'));
+        if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(120);
+      }
+      if (fresh.length || !visible) {
+        if (c.open) {
+          const list = sidePanel.querySelector('[data-role="chat-list"]');
+          const input = sidePanel.querySelector('[data-role="chat-form"] textarea');
+          if (list && input) {
+            const draft = input.value;
+            const focused = document.activeElement === input;
+            renderChat();
+            const ni = sidePanel.querySelector('[data-role="chat-form"] textarea');
+            ni.value = draft;
+            if (focused) ni.focus();
+          } else renderChat();
+        } else renderTasks();
+      }
+      updateTabBadge();
+    } catch {}
+  }
+  function updateTabBadge() {
+    const btn = tabs.querySelector('[data-tab="tasks"]');
+    let b = btn.querySelector('.cg-badge');
+    if (state.chat.unread) {
+      if (!b) btn.insertAdjacentHTML('beforeend', '<i class="cg-badge"></i>');
+      btn.querySelector('.cg-badge').textContent = state.chat.unread;
+    } else b?.remove();
+  }
+  function showToast(text) {
+    const banner = document.createElement('div');
+    banner.className = 'cg-toast';
+    banner.textContent = text;
+    root.appendChild(banner);
+    setTimeout(() => banner.remove(), 4000);
+  }
+  let chatTimer = null;
+  function scheduleChat() {
+    clearTimeout(chatTimer);
+    chatTimer = setTimeout(async () => {
+      await pollChat();
+      scheduleChat();
+    }, state.chat.open ? 4000 : 15000);
+  }
+  function openChat(requestId = null) {
+    state.chat.open = true;
+    state.chat.requestId = requestId;
+    state.requestForm = null;
+    setTab('tasks');
+    renderChat();
+    track('chat_open');
+    pollChat();
+    scheduleChat();
+    sidePanel.querySelector('[data-role="chat-form"] textarea')?.focus();
+  }
+  pollChat().then(scheduleChat);
+
   // ---------- routing ----------
   async function loadRoute(v) {
     state.abort?.abort();
@@ -451,13 +642,14 @@ export function createUi({ root, globe, config, room = null }) {
     const p = placeOf(v);
     const box = panel.querySelector('[data-role="route"]');
     const mode = state.routeMode;
+    track('route', mode);
     const key = `${mode}|${p.lat},${p.lon}|${getLang()}`;
     try {
       let result = state.routeCache.get(key);
       if (!result) {
         result =
           mode === 'transit'
-            ? await fetchTransit(HOTEL, p, getLang(), { signal: controller.signal })
+            ? await fetchTransit(HOTEL, p, getLang(), { signal: controller.signal, destName: p.title })
             : await fetchRoute(mode === 'bike' ? 'bike' : 'foot', HOTEL, p, { signal: controller.signal });
         state.routeCache.set(key, result);
       }
@@ -486,12 +678,11 @@ export function createUi({ root, globe, config, room = null }) {
         .slice(0, 40)
         .map((s, i) => `<li data-action="guide-step" data-i="${i}">${esc(s.instruction || s.name || '')}${s.distanceM ? ` <span class="cg-muted">${esc(formatDistance(s.distanceM, t))}</span>` : ''}</li>`)
         .join('')}</ol>` : ''}`;
-    box._guide = [
-      ...steps.map((s) => ({ lat: s.lat, lon: s.lon, text: s.instruction || s.name || '' })),
-      { lat: p.lat, lon: p.lon, text: t('arrived') },
-    ];
-    globe.drawRoute([{ coords: r.geometry, mode: 'WALK', color: mode === 'bike' ? '#7CFC9A' : '#4cc3ff' }]);
-    globe.flyToBounds([HOTEL, p]);
+    const geom = Array.isArray(r.geometry) ? r.geometry : [];
+    const pts = [...steps.map((s) => ({ lat: s.lat, lon: s.lon, text: s.instruction || s.name || '' })), { lat: p.lat, lon: p.lon, text: t('arrived') }];
+    box._guide = pts.map((pt, i) => ({ ...pt, kind: 'walk', seg: pts[i + 1] ? sliceRoute(geom, pt, pts[i + 1]) : [] }));
+    globe.drawRoute([{ coords: geom, mode: 'WALK', color: mode === 'bike' ? '#7CFC9A' : '#4cc3ff' }]);
+    globe.flyToRoute(geom, [HOTEL, p]);
   }
 
   function renderTransit(box, data, p) {
@@ -503,6 +694,13 @@ export function createUi({ root, globe, config, room = null }) {
       return;
     }
     const routes = (data?.routes ?? []).slice(0, 4);
+    if (!routes.length && data?.walkBetter) {
+      box.innerHTML = `<div class="cg-walkbetter">${icon('directions_walk')}<div><b>${esc(t('walkBetter'))}</b><span>${esc(t('walkBetterSub', { n: Math.round(data.walkS / 60) }))}</span></div>
+        <button class="cg-mode on" data-action="mode" data-mode="walk">${esc(t('walk'))}</button></div>`;
+      globe.clearRoute();
+      globe.flyToBounds([HOTEL, p]);
+      return;
+    }
     if (!routes.length) {
       box.innerHTML = `<p class="cg-muted">${esc(t('noTransit'))}</p>`;
       globe.clearRoute();
@@ -530,7 +728,9 @@ export function createUi({ root, globe, config, room = null }) {
           <div class="cg-tl-big">${esc(countdown(r.departure, true))}</div>
           <div class="cg-tl-times">${esc(formatTime(r.departure, lang))} → ${esc(formatTime(r.arrival, lang))} · <b>${esc(formatDuration(r.durationS, t))}</b></div>
         </div>
+        ${r.leaveAt ? `<div class="cg-leave">${icon('door_open')} ${esc(t('leaveHotelAt', { t: formatTime(r.leaveAt, lang) }))}${data.walkS ? ` <span>· ${esc(t('orWalk', { n: Math.round(data.walkS / 60) }))}</span>` : ''}</div>` : ''}
         <button class="cg-btn" data-action="guide">${icon('navigation')} ${esc(t('guide'))}</button>
+        ${data.source === 'gtfs' ? `<div class="cg-src">${icon('verified')} ${esc(t('officialTimes'))}</div>` : ''}
         <ol class="cg-tl">
           <li class="cg-tl-item hotel"><span class="cg-tl-dot"></span><div><b>${esc(HOTEL.name)}</b></div></li>
           ${r.legs
@@ -546,7 +746,7 @@ export function createUi({ root, globe, config, room = null }) {
                     </div>
                   </li>`
                 : `<li class="cg-tl-item walk" data-action="guide-step" data-i="${i}"><span class="cg-tl-dot"></span>
-                    <div>${icon('directions_walk')} ${esc(t('walk'))} <b>${esc(formatDuration(l.durationS, t))}</b> <span class="cg-muted">· ${esc(formatDistance(l.distanceM, t))}</span></div>
+                    <div>${icon('directions_walk')} ${esc(t('walk'))} <b>${esc(formatDuration(l.durationS, t))}</b> <span class="cg-muted">· ${esc(formatDistance(l.distanceM, t))}${l.instruction ? ` · ${esc(t('walkTo'))} ${esc(l.instruction)}` : ''}</span></div>
                   </li>`,
             )
             .join('')}
@@ -559,15 +759,15 @@ export function createUi({ root, globe, config, room = null }) {
             l.mode === 'TRANSIT'
               ? `${t('line')} ${l.transit.line} ${t('towards')} ${l.transit.headsign} · ${l.transit.from} → ${l.transit.to} (${formatTime(l.transit.departure, lang)})`
               : `${t('walk')} ${formatDuration(l.durationS, t)} · ${l.instruction || ''}`;
-          return { lat: start ? start[1] : p.lat, lon: start ? start[0] : p.lon, text };
+          return { lat: start ? start[1] : p.lat, lon: start ? start[0] : p.lon, text, kind: l.mode === 'TRANSIT' ? 'ride' : 'walk', seg: l.polyline || [] };
         }),
-        { lat: p.lat, lon: p.lon, text: t('arrived') },
+        { lat: p.lat, lon: p.lon, text: t('arrived'), kind: 'end', seg: [] },
       ];
     };
     box._paint = paint;
     paint();
     drawTransit(routes[0]);
-    globe.flyToBounds([HOTEL, p]);
+    globe.flyToRoute(routes[0].polyline || routes[0].legs.flatMap((l) => l.polyline || []), [HOTEL, p]);
     state.tick = setInterval(() => {
       if (!document.body.contains(box)) return clearInterval(state.tick);
       paint();
@@ -607,6 +807,9 @@ export function createUi({ root, globe, config, room = null }) {
     const steps = box?._guide;
     if (!steps?.length) return;
     state.guide = { steps, i: 0 };
+    track('guide', state.routeMode);
+    // Measure the ground under every step now so later steps don't wait for it.
+    for (const s of steps) globe.groundHeight(s.lat, s.lon);
     guideBar.hidden = false;
     root.dataset.guide = 'on';
     setSheet('collapsed');
@@ -629,14 +832,76 @@ export function createUi({ root, globe, config, room = null }) {
         <button class="cg-mode on" data-action="guide-next" ${last ? 'disabled' : ''}>${esc(t('next'))} ${icon('chevron_right')}</button>
       </div>`;
     panel.querySelectorAll('[data-action="guide-step"]').forEach((el) => el.classList.toggle('on', Number(el.dataset.i) === g.i));
-    globe.flyTo({ lat: s.lat, lon: s.lon, height: last ? 260 : 160, heading, pitch: -42, duration: 1.2 });
+    globe.showGuide(g.steps, g.i);
+    // Debounce: fast taps on Next/Prev only fly to the step the user stops on.
+    clearTimeout(state.guideTimer);
+    state.guideTimer = setTimeout(() => moveGuideCamera(g, heading), 180);
+  }
+  function moveGuideCamera(g, fallbackHeading) {
+    if (state.guide !== g) return;
+    const s = g.steps[g.i];
+    const seg = s.seg || [];
+    const last = g.i === g.steps.length - 1;
+    if (s.kind === 'ride' && seg.length > 1) {
+      // A bus/metro leg can be kilometres long: frame the whole ride.
+      globe.flyToRoute(seg);
+      return;
+    }
+    // Stand behind the step, looking along the next stretch of the route.
+    const heading = seg.length > 1 ? headingAlong(seg) : last && g.i > 0 ? bearing(g.steps[g.i - 1], s) : fallbackHeading;
+    const len = pathLength(seg);
+    const range = last ? 260 : Math.min(520, Math.max(170, len * 0.9));
+    globe.lookAt({ lat: s.lat, lon: s.lon, heading, pitch: last ? -48 : -32, range, duration: 1.1 });
   }
   function stopGuide() {
     if (!state.guide) return;
     state.guide = null;
+    clearTimeout(state.guideTimer);
+    globe.clearGuide();
     guideBar.hidden = true;
     delete root.dataset.guide;
     panel.querySelectorAll('[data-action="guide-step"].on').forEach((el) => el.classList.remove('on'));
+  }
+  const distM = (a, b) => {
+    const R = 6371000, toR = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
+    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(x));
+  };
+  const ll = ([lon, lat]) => ({ lat, lon });
+  function pathLength(coords) {
+    let d = 0;
+    for (let i = 1; i < coords.length; i++) d += distM(ll(coords[i - 1]), ll(coords[i]));
+    return d;
+  }
+  /** Direction of travel over the first ~40 m of a stretch (robust to curvy streets). */
+  function headingAlong(coords) {
+    const a = ll(coords[0]);
+    let b = ll(coords[coords.length - 1]);
+    let acc = 0;
+    for (let i = 1; i < coords.length; i++) {
+      acc += distM(ll(coords[i - 1]), ll(coords[i]));
+      if (acc >= 40) {
+        b = ll(coords[i]);
+        break;
+      }
+    }
+    return distM(a, b) < 1 ? 0 : bearing(a, b);
+  }
+  /** The part of the route geometry between two steps. */
+  function sliceRoute(geom, from, to) {
+    if (!geom.length) return [];
+    const nearest = (pt, startAt = 0) => {
+      let best = startAt, bd = Infinity;
+      for (let i = startAt; i < geom.length; i++) {
+        const d = distM(pt, ll(geom[i]));
+        if (d < bd) { bd = d; best = i; }
+      }
+      return best;
+    };
+    const i0 = nearest(from);
+    const i1 = nearest(to, i0);
+    return geom.slice(i0, Math.max(i0 + 2, i1 + 1));
   }
   function bearing(a, b) {
     const φ1 = (a.lat * Math.PI) / 180, φ2 = (b.lat * Math.PI) / 180;
@@ -678,7 +943,10 @@ export function createUi({ root, globe, config, room = null }) {
     } else if (a === 'open-hotel') go({ name: 'hotel' });
     else if (a === 'open-service') {
       const s = HOTEL_SERVICES.find((x) => x.id === id);
-      if (s) go({ name: 'service', service: s });
+      if (s) {
+        track('service', L(s.name, 'es'));
+        go({ name: 'service', service: s });
+      }
     } else if (a === 'filter-cat') go({ name: 'search', cat: el.dataset.cat });
     else if (a === 'mode') {
       state.routeMode = el.dataset.mode;
@@ -697,7 +965,18 @@ export function createUi({ root, globe, config, room = null }) {
       else state.plan.add(id);
       saveSet('concierge.plan', state.plan);
       render();
-    } else if (a === 'request') openRequest(el.dataset.type, { preset: el.dataset.preset || '' });
+    } else if (a === 'chat-open') openChat(el.dataset.request || null);
+    else if (a === 'chat-close') {
+      state.chat.open = false;
+      renderTasks();
+      scheduleChat();
+    } else if (a === 'chat-ctx-clear') {
+      state.chat.requestId = null;
+      renderChat();
+    } else if (a === 'request') {
+      track('action', el.dataset.type);
+      openRequest(el.dataset.type, { preset: el.dataset.preset || '' });
+    }
     else if (a === 'request-cancel') {
       state.requestForm = null;
       renderTasks();
@@ -714,6 +993,27 @@ export function createUi({ root, globe, config, room = null }) {
   });
 
   root.addEventListener('submit', async (e) => {
+    const chatForm = e.target.closest('[data-role="chat-form"]');
+    if (chatForm) {
+      e.preventDefault();
+      const ta = chatForm.querySelector('textarea');
+      const body = ta.value.trim();
+      if (!body || state.chat.sending) return;
+      state.chat.sending = true;
+      try {
+        const msgs = await sendChat({ body, room: state.guest?.room || '', name: state.guest?.name || '', lang: getLang(), requestId: state.chat.requestId });
+        ta.value = '';
+        appendMessages(msgs);
+        state.chat.requestId = null;
+        renderChat();
+        sidePanel.querySelector('[data-role="chat-form"] textarea')?.focus();
+      } catch {
+        showToast(t('requestFailed'));
+      } finally {
+        state.chat.sending = false;
+      }
+      return;
+    }
     const form = e.target.closest('[data-role="request-form"]');
     if (!form) return;
     e.preventDefault();
@@ -733,6 +1033,7 @@ export function createUi({ root, globe, config, room = null }) {
       saveObj('concierge.guest', state.guest);
       state.requests.unshift(saved);
       saveList('concierge.requests', state.requests);
+      setTimeout(pollChat, 300);
       state.requestForm = null;
       renderTasks();
       const banner = document.createElement('div');
@@ -743,6 +1044,14 @@ export function createUi({ root, globe, config, room = null }) {
     } catch {
       msg.textContent = t('requestFailed');
       form.querySelector('[type="submit"]').disabled = false;
+    }
+  });
+
+  root.addEventListener('keydown', (e) => {
+    const ta = e.target.closest('[data-role="chat-form"] textarea');
+    if (ta && e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      ta.form.requestSubmit();
     }
   });
 
@@ -763,6 +1072,7 @@ export function createUi({ root, globe, config, room = null }) {
         renderResultsOnly();
         const results = await searchPlaces(q);
         if (state.view.q !== q) return;
+        if (q.trim().length >= 3) track('search', q.trim().toLowerCase());
         state.searchResults = results;
         globe.removeMarkers('result');
         for (const r of results) {
@@ -797,6 +1107,7 @@ export function createUi({ root, globe, config, room = null }) {
   function openPoi(id) {
     const poi = POIS.find((p) => p.id === id);
     if (!poi) return;
+    track('view_poi', poi.id);
     globe.setSelected(id);
     setTab('explore');
     setSheet('half');
@@ -871,6 +1182,9 @@ export function createUi({ root, globe, config, room = null }) {
 
   setTab('explore');
   render();
+  refreshWeather();
+  setInterval(refreshWeather, 15 * 60_000);
+  track('open', room ? 'qr' : 'web');
   return { go, back, render };
 }
 

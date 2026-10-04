@@ -36,17 +36,25 @@ export async function fetchRoute(profile, from, to, { signal } = {}) {
   return data; // { distanceM, durationS, geometry: [[lon,lat]...], steps }
 }
 
-/** Transit itineraries via the Google Routes proxy (server-side key). */
-export async function fetchTransit(from, to, lang, { signal } = {}) {
-  const res = await fetch('/api/google/routes', {
+/** Transit itineraries: official GTFS timetables first, Google Routes as fallback. */
+export async function fetchTransit(from, to, lang, { signal, destName } = {}) {
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/transit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ origin: { lat: from.lat, lon: from.lon }, destination: { lat: to.lat, lon: to.lon }, destName, lang }),
+    signal,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (data?.configured) return data; // { routes, walkS, walkBetter, source: 'gtfs' }
+  const g = await fetch('/api/google/routes', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ origin: from, destination: to, lang }),
     signal,
   });
-  const data = await res.json();
-  if (data?.error && !data.routes?.length) throw new Error(data.error);
-  return data; // { configured, routes }
+  const gd = await g.json().catch(() => ({}));
+  if (gd?.error && !gd.routes?.length) throw new Error(gd.error);
+  return gd; // { configured, routes }
 }
 
 function normalize(s) {
@@ -167,7 +175,7 @@ export async function submitRequest(payload) {
   const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...payload, roomToken: CTX.roomToken || undefined }),
+    body: JSON.stringify({ ...payload, roomToken: CTX.roomToken || undefined, guestKey: guestKey() }),
   });
   const data = await res.json();
   if (!res.ok || !data?.request) throw new Error(data?.error || 'request failed');
@@ -194,3 +202,59 @@ export async function loadRoom(slug, token) {
   const res = await fetch(`/api/h/${encodeURIComponent(slug || 'default')}/room/${encodeURIComponent(token)}`);
   return res.ok ? res.json() : null;
 }
+
+/** Random per-device key that identifies this guest's conversation (no personal data). */
+export function guestKey() {
+  try {
+    let k = localStorage.getItem('concierge.guestKey');
+    if (!k || !/^[A-Za-z0-9_-]{16,64}$/.test(k)) {
+      k = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^A-Za-z0-9]/g, '').slice(0, 32).padEnd(20, '0');
+      localStorage.setItem('concierge.guestKey', k);
+    }
+    return k;
+  } catch {
+    CTX._key ||= `k${Date.now()}${Math.floor(Math.random() * 1e9)}`.padEnd(20, '0');
+    return CTX._key;
+  }
+}
+
+export async function fetchChat(after = 0, markRead = false) {
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/chat?key=${guestKey()}&after=${after}${markRead ? '&read=1' : ''}`);
+  if (!res.ok) throw new Error(`chat ${res.status}`);
+  return res.json(); // { messages, unread }
+}
+
+export async function sendChat({ body, room, name, lang, requestId }) {
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ key: guestKey(), body, room, name, lang, requestId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `chat ${res.status}`);
+  return data.messages || [];
+}
+
+export async function fetchWeather() {
+  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/weather`);
+  if (!res.ok) throw new Error(`weather ${res.status}`);
+  return res.json();
+}
+
+// ---- anonymous usage events (batched) ----
+const queue = [];
+let flushTimer = null;
+export function track(kind, ref = '') {
+  queue.push({ kind, ref: String(ref).slice(0, 60) });
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flush, 4000);
+}
+function flush() {
+  if (!queue.length || !CTX.slug) return;
+  const body = JSON.stringify({ lang: document.documentElement.lang, events: queue.splice(0, 50) });
+  const url = `/api/h/${encodeURIComponent(CTX.slug)}/events`;
+  if (!(navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'application/json' })))) {
+    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  }
+}
+addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
