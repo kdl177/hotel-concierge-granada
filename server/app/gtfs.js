@@ -14,6 +14,7 @@
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
+import { createLimiter, limit, clientIp } from './security.js';
 
 // ---------------------------------------------------------------- zip + csv
 /** Read every entry of a ZIP (stored or deflated) into { name: Buffer }. */
@@ -551,14 +552,16 @@ export function createTransit({ dataDir }) {
   }
   load();
 
+  // Route planning is CPU work: bound it per client.
+  const limiter = createLimiter({ windowMs: 60_000, max: 30 });
   function mount(app, { hotelBySlug, admin }) {
-    app.post('/h/:slug/transit', async (req, res) => {
+    app.post('/h/:slug/transit', limit(limiter, clientIp, 'too many route requests'), async (req, res) => {
       const h = hotelBySlug.get(req.params.slug);
       if (!h) return res.status(404).json({ error: 'hotel not found' });
       const n = await load();
       if (!n.feeds.length) return res.json({ configured: false, source: 'gtfs', routes: [] });
       const { origin, destination } = req.body || {};
-      const ok = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon);
+      const ok = (p) => p && Number.isFinite(p.lat) && Number.isFinite(p.lon) && Math.abs(p.lat) <= 90 && Math.abs(p.lon) <= 180;
       if (!ok(origin) || !ok(destination)) return res.status(400).json({ error: 'origin/destination {lat, lon} required' });
       const at = req.body.at ? new Date(req.body.at) : new Date();
       const routes = plan(n, { origin, destination, at: Number.isNaN(at.getTime()) ? new Date() : at });
