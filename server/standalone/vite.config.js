@@ -30,7 +30,9 @@ export default defineConfig(({ command, mode }) => {
         index: fileURLToPath(new URL('../../index.html', import.meta.url)),
         reception: fileURLToPath(new URL('../../reception.html', import.meta.url)),
         admin: fileURLToPath(new URL('../../admin.html', import.meta.url)),
-        console: fileURLToPath(new URL('../../console.html', import.meta.url)),
+        // The God's Eye View console is kept in the repo and in `npm run dev`;
+        // it is only bundled for production when CONCIERGE_CONSOLE=1.
+        ...(process.env.CONCIERGE_CONSOLE === '1' ? { console: fileURLToPath(new URL('../../console.html', import.meta.url)) } : {}),
       },
     },
   };
