@@ -18,6 +18,11 @@ export function createConciergeApp({ env = process.env } = {}) {
   const seeded = seedIfEmpty(db, { hotel: HOTEL, services: HOTEL_SERVICES, actions: HOTEL_ACTIONS, pois: POIS });
   if (seeded) console.log(`[concierge] seeded first hotel "${HOTEL.name}" (slug ${HOTEL.id}) into ${dbFile}`);
 
+  // One-time fix: early seeds placed the Gran Hotel Luna ~350 m off. Only rows
+  // still holding that exact old value are corrected; edits made in Admin stay.
+  const fixed = db.prepare('UPDATE hotels SET lat = ?, lon = ? WHERE slug = ? AND lat = 37.1737 AND lon = -3.6095').run(HOTEL.lat, HOTEL.lon, HOTEL.id);
+  if (fixed.changes) console.log(`[concierge] corrected coordinates of ${HOTEL.name}`);
+
   // First superadmin: from env, or a default local account (printed once).
   const users = db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
   if (users === 0) {
@@ -38,6 +43,9 @@ export function createConciergeApp({ env = process.env } = {}) {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', true);
-  app.use('/api', createApi({ db, secret, secureCookies: env.NODE_ENV === 'production' && !env.CONCIERGE_INSECURE_COOKIES, publicUrl: (env.PUBLIC_URL || '').replace(/\/$/, '') }));
+  const dataDir = dbFile === ':memory:' ? path.resolve(process.cwd(), 'data') : path.dirname(dbFile);
+  const api = createApi({ db, secret, secureCookies: env.NODE_ENV === 'production' && !env.CONCIERGE_INSECURE_COOKIES, publicUrl: (env.PUBLIC_URL || '').replace(/\/$/, ''), dataDir });
+  app.use('/uploads', api.media.serve);
+  app.use('/api', api);
   return { app, db };
 }

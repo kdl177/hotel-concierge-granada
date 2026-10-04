@@ -65,16 +65,56 @@ CREATE TABLE IF NOT EXISTS request_events (
   id INTEGER PRIMARY KEY AUTOINCREMENT, request_id TEXT NOT NULL REFERENCES requests(id) ON DELETE CASCADE,
   user_id TEXT, event TEXT NOT NULL, detail TEXT DEFAULT '', at TEXT DEFAULT (datetime('now'))
 );
+CREATE TABLE IF NOT EXISTS conversations (
+  key TEXT PRIMARY KEY, hotel_id TEXT NOT NULL REFERENCES hotels(id) ON DELETE CASCADE,
+  room TEXT DEFAULT '', guest_name TEXT DEFAULT '', stay_id TEXT, lang TEXT DEFAULT 'es',
+  unread_staff INTEGER DEFAULT 0, unread_guest INTEGER DEFAULT 0,
+  created_at TEXT DEFAULT (datetime('now')), last_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS messages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, conv_key TEXT NOT NULL REFERENCES conversations(key) ON DELETE CASCADE,
+  hotel_id TEXT NOT NULL, author TEXT NOT NULL CHECK(author IN ('guest','staff','system')),
+  user_id TEXT, request_id TEXT, body TEXT NOT NULL, created_at TEXT DEFAULT (datetime('now'))
+);
+CREATE TABLE IF NOT EXISTS events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, hotel_id TEXT NOT NULL, kind TEXT NOT NULL, ref TEXT DEFAULT '',
+  lang TEXT DEFAULT '', at TEXT DEFAULT (datetime('now'))
+);
 CREATE INDEX IF NOT EXISTS idx_requests_hotel ON requests(hotel_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conv_key, id);
+CREATE INDEX IF NOT EXISTS idx_conv_hotel ON conversations(hotel_id, last_at DESC);
+CREATE INDEX IF NOT EXISTS idx_events_hotel ON events(hotel_id, at);
 CREATE INDEX IF NOT EXISTS idx_events_request ON request_events(request_id);
 `;
+
+/** Bundled Granada places that are under a roof (rainy / very hot day suggestions). */
+const INDOOR_KEYS = ['catedral', 'capilla-real', 'san-jeronimo', 'san-juan-de-dios', 'cartuja', 'parque-ciencias', 'alcaiceria'];
 
 export function openDatabase(file) {
   if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** Additive column migrations for databases created by earlier versions. */
+function migrate(db) {
+  const has = (table, col) => db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === col);
+  const add = (table, col, def) => {
+    if (!has(table, col)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${def}`);
+  };
+  add('requests', 'guest_key', "TEXT DEFAULT ''");
+  add('requests', 'first_response_at', 'TEXT');
+  add('pois', 'photo', "TEXT DEFAULT ''");
+  add('pois', 'indoor', 'INTEGER DEFAULT 0');
+  add('services', 'photo', "TEXT DEFAULT ''");
+  add('hotels', 'photo', "TEXT DEFAULT ''");
+  // Databases seeded before the "indoor" column existed: mark the bundled covered places once.
+  if (!db.prepare('SELECT 1 FROM pois WHERE indoor = 1 LIMIT 1').get()) {
+    db.prepare(`UPDATE pois SET indoor = 1 WHERE key IN (${INDOOR_KEYS.map(() => '?').join(',')})`).run(...INDOOR_KEYS);
+  }
 }
 
 export const uid = () => randomUUID().slice(0, 8);
@@ -95,20 +135,20 @@ export function hotelPublic(h) {
     id: h.id, slug: h.slug, name: h.name, brand: h.brand, address: h.address, phone: h.phone,
     email: h.email, city: h.city, lat: h.lat, lon: h.lon, langs: P(h.langs, ['es', 'en', 'fr', 'de']),
     reception: P(h.reception_json, {}), wifi: P(h.wifi_json, {}), welcomeView: P(h.view_json, {}),
-    theme: P(h.theme_json, {}), taxiPhone: h.taxi_phone,
+    theme: P(h.theme_json, {}), taxiPhone: h.taxi_phone, photo: h.photo || '',
   };
 }
 export function serviceRow(r) {
-  return { id: r.id, sort: r.sort, icon: r.icon, category: r.category, name: P(r.name_json, {}), desc: P(r.desc_json, {}), hours: P(r.hours_json, {}), open: P(r.open_json), bookable: !!r.bookable, active: !!r.active };
+  return { id: r.id, sort: r.sort, icon: r.icon, category: r.category, name: P(r.name_json, {}), desc: P(r.desc_json, {}), hours: P(r.hours_json, {}), open: P(r.open_json), bookable: !!r.bookable, active: !!r.active, photo: r.photo || '' };
 }
 export function actionRow(r) {
   return { id: r.id, key: r.key, sort: r.sort, icon: r.icon, name: P(r.name_json, {}), sub: P(r.sub_json, {}), fields: P(r.fields_json, []), tel: r.tel, active: !!r.active };
 }
 export function poiRow(r) {
-  return { id: r.id, key: r.key, sort: r.sort, cat: r.cat, lat: r.lat, lon: r.lon, minutes: r.minutes, best: P(r.best_json, []), priority: r.priority, name: P(r.name_json, {}), tag: P(r.tag_json, {}), desc: P(r.desc_json, {}), tasks: P(r.tasks_json, {}), actions: P(r.actions_json, []), active: !!r.active };
+  return { id: r.id, key: r.key, sort: r.sort, cat: r.cat, lat: r.lat, lon: r.lon, minutes: r.minutes, best: P(r.best_json, []), priority: r.priority, name: P(r.name_json, {}), tag: P(r.tag_json, {}), desc: P(r.desc_json, {}), tasks: P(r.tasks_json, {}), actions: P(r.actions_json, []), active: !!r.active, photo: r.photo || '', indoor: !!r.indoor };
 }
 export function requestRow(r) {
-  return { id: r.id, hotelId: r.hotel_id, stayId: r.stay_id, room: r.room, type: r.type, name: r.name, when: r.when_at, details: r.details, lang: r.lang, status: r.status, note: r.note, assignedTo: r.assigned_to, assignedName: r.assigned_name ?? null, createdAt: r.created_at, updatedAt: r.updated_at };
+  return { id: r.id, hotelId: r.hotel_id, stayId: r.stay_id, guestKey: r.guest_key || '', room: r.room, type: r.type, name: r.name, when: r.when_at, details: r.details, lang: r.lang, status: r.status, note: r.note, assignedTo: r.assigned_to, assignedName: r.assigned_name ?? null, createdAt: r.created_at, updatedAt: r.updated_at };
 }
 
 /** Insert the first hotel from the bundled config files when the DB is empty. */
@@ -127,6 +167,7 @@ export function seedIfEmpty(db, { hotel, services, actions, pois }) {
   actions.forEach((a, i) => insA.run(uid(), hotelId, i, a.id, a.icon, J(a.name), J(a.sub ?? {}), J(a.fields ?? []), a.fields ? '' : a.tel || ''));
   const insP = db.prepare(`INSERT INTO pois (id, hotel_id, sort, key, cat, lat, lon, minutes, best_json, priority, name_json, tag_json, desc_json, tasks_json, actions_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`);
   pois.forEach((p, i) => insP.run(uid(), hotelId, i, p.id, p.cat, p.lat, p.lon, p.minutes, J(p.best), p.priority, J(p.name), J(p.tag), J(p.desc), J(p.tasks), J(p.actions ?? [])));
+  db.prepare(`UPDATE pois SET indoor = 1 WHERE hotel_id = ? AND key IN (${INDOOR_KEYS.map(() => '?').join(',')})`).run(hotelId, ...INDOOR_KEYS);
   const insR = db.prepare(`INSERT INTO rooms (id, hotel_id, number, token, floor) VALUES (?,?,?,?,?)`);
   for (const n of ['101', '102', '103', '201', '202', '203', '301', '302']) insR.run(uid(), hotelId, n, token(), n[0]);
   return hotelId;
