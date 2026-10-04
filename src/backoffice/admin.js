@@ -1,5 +1,6 @@
 /** Hotel admin panel: hotel data, services, quick actions, places, rooms (QR), users, hotels (superadmin). */
-import { api, esc, icon, requireLogin, toast, modal, setHotelOverride, ROLE_LABEL } from './common.js';
+import { api, esc, icon, requireLogin, toast, modal, setHotelOverride, ROLE_LABEL, TYPE_LABEL } from './common.js';
+import { renderStats } from './stats.js';
 
 const LANGS = ['es', 'en', 'fr', 'de'];
 const LANG_NAME = { es: 'Español', en: 'English', fr: 'Français', de: 'Deutsch' };
@@ -35,6 +36,7 @@ const TABS = [
   ['pois', 'place', 'Lugares'],
   ['rooms', 'qr_code', 'Habitaciones y QR'],
   ['users', 'group', 'Usuarios'],
+  ['stats', 'monitoring', 'Estadísticas'],
   ...(state.user.role === 'superadmin' ? [['hotels', 'domain', 'Hoteles']] : []),
 ];
 
@@ -88,12 +90,69 @@ function unflatten(v) {
 const linesToArray = (s) => String(s || '').split('\n').map((x) => x.trim()).filter(Boolean);
 const num = (v, d = 0) => (Number.isFinite(Number(v)) && v !== '' ? Number(v) : d);
 
+/** Photo picker: URL field + upload button (resized in the browser) + preview. */
+const photoField = (value = '') => `<div class="photo-field">
+  <img data-preview src="${esc(value)}" ${value ? '' : 'hidden'} alt="" />
+  <div class="photo-ctl"><input name="photo" value="${esc(value)}" placeholder="URL de la imagen, o súbela →" />
+    <div class="row tight"><label class="btn sm">${icon('upload')} Subir foto<input type="file" accept="image/jpeg,image/png,image/webp" data-upload hidden /></label>
+    <button type="button" class="btn sm no" data-clear-photo>${icon('delete')} Quitar</button><span class="muted" data-upload-msg></span></div></div></div>`;
+
+function resizeImage(file, max = 1600) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement('canvas');
+      c.width = Math.round(img.width * k);
+      c.height = Math.round(img.height * k);
+      c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      resolve(c.toDataURL('image/jpeg', 0.82));
+    };
+    img.onerror = () => reject(new Error('No se pudo leer la imagen'));
+    img.src = URL.createObjectURL(file);
+  });
+}
+document.addEventListener('change', async (e) => {
+  const input = e.target.closest('[data-upload]');
+  if (!input?.files?.[0]) return;
+  const box = input.closest('.photo-field');
+  const msg = box.querySelector('[data-upload-msg]');
+  msg.textContent = 'Subiendo…';
+  try {
+    const { url } = await api('/admin/upload', { method: 'POST', body: { dataUrl: await resizeImage(input.files[0]) } });
+    box.querySelector('[name="photo"]').value = url;
+    const img = box.querySelector('[data-preview]');
+    img.src = url;
+    img.hidden = false;
+    msg.textContent = 'Subida ✔';
+  } catch (err) {
+    msg.textContent = err.message;
+  }
+  input.value = '';
+});
+document.addEventListener('input', (e) => {
+  const f = e.target.closest('.photo-field [name="photo"]');
+  if (!f) return;
+  const img = f.closest('.photo-field').querySelector('[data-preview]');
+  img.src = f.value;
+  img.hidden = !f.value;
+});
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-clear-photo]');
+  if (!b) return;
+  const box = b.closest('.photo-field');
+  box.querySelector('[name="photo"]').value = '';
+  box.querySelector('[data-preview]').hidden = true;
+});
+
 // ---------- tabs ----------
 async function load() {
   const m = main();
   m.innerHTML = '<p class="muted">Cargando…</p>';
   try {
     if (state.tab === 'hotel') return renderHotel(m);
+    if (state.tab === 'stats') return renderStats(m, { hotel: state.hotel });
     if (state.tab === 'hotels') return renderHotels(m);
     const { items } = await api(`/admin/${state.tab}`);
     state.items = items;
@@ -120,10 +179,13 @@ async function renderHotel(m) {
     <h3>Idiomas de la app</h3>${checks('langs', LANGS, hotel.langs, LANG_NAME)}
     <h3>Texto de recepción (pie de la app)</h3>${i18nInputs('reception', hotel.reception)}
     <h3>Texto Wi-Fi</h3>${i18nInputs('wifi', hotel.wifi)}
+    <h3>Foto del hotel</h3>${photoField(hotel.photo)}
     <h3>Notificaciones</h3>
     <div class="row"><label>Webhook (n8n, Make, Slack…) al crear/actualizar solicitudes<input name="webhookUrl" value="${esc(hotel.webhookUrl || '')}" placeholder="https://…" /></label><label>Email de aviso (requiere SMTP_URL en el servidor)<input name="notifyEmail" value="${esc(hotel.notifyEmail || '')}" /></label></div>
+    <h3>Transporte público (horarios oficiales GTFS)</h3><div data-transit class="muted">Comprobando…</div>
     <div class="foot"><button class="btn primary">Guardar</button> <span class="muted">Slug de la app: <code>${esc(hotel.slug)}</code> → <a target="_blank" href="/?h=${esc(hotel.slug)}">/?h=${esc(hotel.slug)}</a></span></div>
   </form>`;
+  paintTransit(m.querySelector('[data-transit]'));
   m.querySelector('form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const raw = Object.fromEntries(new FormData(e.target).entries());
@@ -136,6 +198,30 @@ async function renderHotel(m) {
       toast(err.message, 'err');
     }
   });
+}
+
+async function paintTransit(box, reload = false) {
+  try {
+    const { feeds, dir } = reload ? await api('/admin/transit/reload', { method: 'POST' }) : await api('/admin/transit');
+    const fmtD = (d) => (d && d.length === 8 ? `${d.slice(6)}/${d.slice(4, 6)}/${d.slice(0, 4)}` : '—');
+    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
+    box.classList.remove('muted');
+    box.innerHTML = feeds.length
+      ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th></th></tr></thead><tbody>${feeds
+          .map((f) => {
+            const st = f.validTo < today ? '<span class="badge rejected">Caducado</span>' : f.validTo < soon ? '<span class="badge pending">Renovar pronto</span>' : '<span class="badge confirmed">Al día</span>';
+            return `<tr><td><b>${esc(f.agencies.join(', '))}</b><div class="muted small">${esc(f.file)}</div></td><td>${f.trips.toLocaleString('es-ES')}</td><td>${f.stops}</td><td>${fmtD(f.validTo)}</td><td>${st}</td></tr>`;
+          })
+          .join('')}</tbody></table><p class="muted small">Para actualizar: descarga el nuevo .zip en nap.transportes.gob.es, déjalo en <code>${esc(dir)}</code> (borra el antiguo) y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`
+      : `<p class="muted">No hay horarios cargados. Deja los .zip GTFS en <code>${esc(dir)}</code> y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`;
+    box.querySelector('[data-reload-transit]')?.addEventListener('click', () => {
+      box.innerHTML = 'Recargando…';
+      paintTransit(box, true);
+    });
+  } catch (err) {
+    box.textContent = err.message;
+  }
 }
 
 function listPage(m, { title, help, columns, rows, onNew }) {
@@ -184,12 +270,13 @@ async function editService(s) {
       <h4>Nombre</h4>${i18nInputs('name', s?.name)}<h4>Descripción</h4>${i18nInputs('desc', s?.desc, { textarea: true })}<h4>Horario (texto)</h4>${i18nInputs('hours', s?.hours)}
       <h4>Horario semanal para “Abierto ahora” (opcional)</h4><div class="row"><label>Desde<input name="from" type="time" value="${esc(open?.from || '')}" /></label><label>Hasta<input name="to" type="time" value="${esc(open?.to || '')}" /></label></div>
       ${checks('days', ['1', '2', '3', '4', '5', '6', '0'], (open?.days || []).map(String), { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 0: 'Dom' })}
+      <h4>Foto</h4>${photoField(s?.photo)}
       <div class="row"><label class="chk"><input type="checkbox" name="bookable" ${s?.bookable ? 'checked' : ''}/> Se reserva en recepción</label><label class="chk"><input type="checkbox" name="active" ${s?.active ?? true ? 'checked' : ''}/> Activo</label></div>`,
   });
   if (!v) return;
   const u = unflatten(v);
   const openTable = u.from && u.to && u.days?.length ? [{ days: u.days.map(Number), from: u.from, to: u.to }] : null;
-  save('services', s, { icon: u.icon, category: u.category, sort: num(u.sort), name: u.name, desc: u.desc, hours: u.hours, open: openTable, bookable: !!u.bookable, active: !!u.active });
+  save('services', s, { icon: u.icon, category: u.category, sort: num(u.sort), name: u.name, desc: u.desc, hours: u.hours, open: openTable, bookable: !!u.bookable, active: !!u.active, photo: u.photo || '' });
 }
 
 // Actions
@@ -222,8 +309,8 @@ function renderPois(m) {
   listPage(m, {
     title: 'Lugares y qué hacer',
     help: 'Cada lugar lleva su checklist de tareas y botones de acción (enlace de entradas, solicitud a recepción o ver transporte).',
-    columns: ['Prio.', 'Nombre', 'Categoría', 'Etiqueta', 'Minutos', 'Momentos', 'Tareas', 'Botones', 'Activo'],
-    rows: state.items.map((p) => `<tr><td>${p.priority}</td><td><b>${esc(p.name.es || p.name.en)}</b></td><td>${esc(p.cat)}</td><td>${esc(p.tag.es || '')}</td><td>${p.minutes}</td><td>${esc(p.best.join(', '))}</td><td>${(p.tasks.es || []).length}</td><td>${p.actions.length}</td><td>${p.active ? '✔' : '—'}</td>${rowBtns(p.id)}</tr>`),
+    columns: ['Prio.', 'Foto', 'Nombre', 'Categoría', 'Etiqueta', 'Minutos', 'Momentos', 'Tareas', 'Botones', 'Activo'],
+    rows: state.items.map((p) => `<tr><td>${p.priority}</td><td>${p.photo ? `<img class="thumb" src="${esc(p.photo)}" alt="" />` : '<span class="muted">—</span>'}</td><td><b>${esc(p.name.es || p.name.en)}</b>${p.indoor ? ` <span class="badge">a cubierto</span>` : ''}</td><td>${esc(p.cat)}</td><td>${esc(p.tag.es || '')}</td><td>${p.minutes}</td><td>${esc(p.best.join(', '))}</td><td>${(p.tasks.es || []).length}</td><td>${p.actions.length}</td><td>${p.active ? '✔' : '—'}</td>${rowBtns(p.id)}</tr>`),
     onNew: () => editPoi(null),
   });
   bindRows(m, { onEdit: editPoi, onDelete: (id) => api(`/admin/pois/${id}`, { method: 'DELETE' }) });
@@ -235,6 +322,8 @@ async function editPoi(p) {
     title: p ? 'Editar lugar' : 'Nuevo lugar',
     body: `<div class="row"><label>Categoría${select('cat', CATS, p?.cat || 'monument')}</label><label>Prioridad (0–10)<input name="priority" type="number" value="${p?.priority ?? 5}" /></label><label>Duración (min)<input name="minutes" type="number" value="${p?.minutes ?? 60}" /></label></div>
       <div class="row"><label>Latitud<input name="lat" type="number" step="0.000001" value="${p?.lat ?? ''}" required /></label><label>Longitud<input name="lon" type="number" step="0.000001" value="${p?.lon ?? ''}" required /></label></div>
+      <h4>Foto</h4>${photoField(p?.photo)}
+      <label class="chk"><input type="checkbox" name="indoor" ${p?.indoor ? 'checked' : ''}/> A cubierto (se recomienda cuando llueve o hace mucho calor)</label>
       <h4>Mejor momento</h4>${checks('best', MOMENTS, p?.best || ['morning', 'afternoon'], { morning: 'Mañana', afternoon: 'Tarde', evening: 'Atardecer', night: 'Noche' })}
       <h4>Nombre</h4>${i18nInputs('name', p?.name)}<h4>Etiqueta corta</h4>${i18nInputs('tag', p?.tag)}<h4>Descripción</h4>${i18nInputs('desc', p?.desc, { textarea: true })}
       <h4>Qué hacer (una tarea por línea)</h4>${i18nInputs('tasks', Object.fromEntries(LANGS.map((l) => [l, (p?.tasks?.[l] || []).join('\n')])), { textarea: true, rows: 4 })}
@@ -250,7 +339,7 @@ async function editPoi(p) {
     return { [type === 'url' ? 'url' : type === 'request' ? 'request' : 'mode']: value?.trim(), icon: ic?.trim() || undefined, label };
   });
   const tasks = Object.fromEntries(LANGS.map((l) => [l, linesToArray(u.tasks?.[l])]));
-  save('pois', p, { cat: u.cat, priority: num(u.priority, 5), minutes: num(u.minutes, 60), lat: num(u.lat), lon: num(u.lon), best: u.best || [], name: u.name, tag: u.tag, desc: u.desc, tasks, actions, active: !!u.active, key: p?.key });
+  save('pois', p, { cat: u.cat, priority: num(u.priority, 5), minutes: num(u.minutes, 60), lat: num(u.lat), lon: num(u.lon), best: u.best || [], name: u.name, tag: u.tag, desc: u.desc, tasks, actions, active: !!u.active, key: p?.key, photo: u.photo || '', indoor: !!u.indoor });
 }
 
 // Rooms

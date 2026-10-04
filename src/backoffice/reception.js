@@ -2,7 +2,7 @@
 import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, toast, beep, modal, setHotelOverride } from './common.js';
 
 const root = document.getElementById('app');
-const state = { user: null, hotel: null, hotels: [], tab: 'inbox', filter: 'open', q: '', requests: [], counts: {}, users: [], stays: [], known: null, expanded: new Set(), events: new Map() };
+const state = { user: null, hotel: null, hotels: [], tab: 'inbox', filter: 'open', q: '', requests: [], counts: {}, users: [], stays: [], known: null, expanded: new Set(), events: new Map(), chats: [], chatUnread: 0, chatKey: null, chat: null, chatLastSeen: null };
 
 const session = await requireLogin(root, 'Recepción');
 state.user = session.user;
@@ -36,6 +36,7 @@ function shell() {
       ${state.hotels.length > 1 ? `<select data-hotel class="sel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <nav class="tabs">
         <button data-tab="inbox" class="${state.tab === 'inbox' ? 'on' : ''}">${icon('inbox')} Solicitudes <span class="pill" data-pending></span></button>
+        <button data-tab="chats" class="${state.tab === 'chats' ? 'on' : ''}">${icon('forum')} Chat <span class="pill" data-chat-unread>${state.chatUnread || ''}</span></button>
         <button data-tab="stays" class="${state.tab === 'stays' ? 'on' : ''}">${icon('bed')} Estancias</button>
       </nav>
       <div class="me"><span>${esc(state.user.name || state.user.email)}</span>
@@ -71,6 +72,7 @@ function shell() {
 function renderMain() {
   const main = document.getElementById('main');
   if (state.tab === 'stays') return renderStays(main);
+  if (state.tab === 'chats') return renderChats(main);
   main.innerHTML = `
     <div class="toolbar">
       <div class="filters">
@@ -129,6 +131,7 @@ function renderCards() {
           ${r.status !== 'pending' ? `<button class="btn" data-status="pending">${icon('undo')} Reabrir</button>` : ''}
           <select class="sel" data-assign><option value="">Sin asignar</option>${state.users.map((u) => `<option value="${u.id}" ${u.id === r.assignedTo ? 'selected' : ''}>${esc(u.name || u.email)}</option>`).join('')}</select>
           <button class="btn" data-note>${icon('sms')} Nota</button>
+          ${r.guestKey ? `<button class="btn" data-chat="${esc(r.guestKey)}">${icon('forum')} Chat</button>` : ''}
           <button class="btn" data-history>${icon('history')} ${open ? 'Ocultar' : 'Historial'}</button>
         </div>
         ${open ? `<ol class="events">${(ev || []).map((e) => `<li><span class="muted">${esc(fmt(e.at))}</span> ${esc(e.user || 'Huésped')} · ${esc(eventLabel(e))}</li>`).join('') || '<li class="muted">Cargando…</li>'}</ol>` : ''}
@@ -147,6 +150,13 @@ function eventLabel(e) {
 }
 
 document.addEventListener('click', async (e) => {
+  const toChat = e.target.closest('[data-chat]');
+  if (toChat) {
+    state.tab = 'chats';
+    state.chatKey = toChat.dataset.chat;
+    shell();
+    return refresh();
+  }
   const card = e.target.closest('[data-id]');
   if (!card) return;
   const id = card.dataset.id;
@@ -181,7 +191,9 @@ document.addEventListener('change', async (e) => {
 });
 
 async function refresh() {
+  await refreshChatList();
   if (state.tab === 'stays') return refreshStays();
+  if (state.tab === 'chats') return refreshChat();
   try {
     const [{ requests, counts }, { users }] = await Promise.all([
       api(`/staff/requests?status=${state.filter}&q=${encodeURIComponent(state.q)}`),
@@ -256,6 +268,129 @@ async function refreshStays() {
     }),
   );
 }
+
+
+// ---------- chats ----------
+const who = (c) => `Hab. ${c.room || '—'}${c.guestName ? ` · ${c.guestName}` : ''}`;
+function sysLabel(body) {
+  if (body === 'created') return 'Nueva solicitud';
+  return `Estado: ${STATUS_LABEL[body.split(':')[1]] || body}`;
+}
+async function refreshChatList() {
+  try {
+    const { chats, unread } = await api('/staff/chats');
+    const newest = chats.find((c) => c.unread && c.lastAuthor === 'guest');
+    const sig = chats.filter((c) => c.unread).map((c) => `${c.key}:${c.unread}`).join('|');
+    if (state.chatLastSeen !== null && sig && sig !== state.chatLastSeen && newest && newest.key !== state.chatKey) {
+      if (state.audio) beep();
+      toast(`Mensaje de ${who(newest)}`, 'new');
+    }
+    state.chatLastSeen = sig;
+    state.chats = chats;
+    state.chatUnread = unread;
+    const pill = document.querySelector('[data-chat-unread]');
+    if (pill) pill.textContent = unread || '';
+  } catch {}
+}
+function renderChats(main) {
+  main.innerHTML = `<div class="chat-layout">
+    <aside class="chat-list" data-chat-list></aside>
+    <section class="chat-pane" data-chat-pane><p class="muted" style="padding:20px">Elige una conversación.</p></section>
+  </div>`;
+  paintChatList();
+}
+function paintChatList() {
+  const box = document.querySelector('[data-chat-list]');
+  if (!box) return;
+  box.innerHTML = state.chats.length
+    ? state.chats
+        .map(
+          (c) => `<button class="chat-item ${c.key === state.chatKey ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-open-chat="${esc(c.key)}">
+            <div class="chat-item-top"><b>${esc(who(c))}</b><span class="muted">${esc(fmt(c.lastAt))}</span></div>
+            <div class="chat-item-last">${c.lastAuthor === 'system' ? esc(sysLabel(c.lastBody || '')) : `${c.lastAuthor === 'staff' ? 'Tú: ' : ''}${esc(c.lastBody || '')}`}</div>
+            ${c.unread ? `<span class="pill">${c.unread}</span>` : ''}
+            <span class="lang">${esc((c.lang || '').toUpperCase())}</span>
+          </button>`,
+        )
+        .join('')
+    : '<p class="muted" style="padding:14px">Sin conversaciones todavía.</p>';
+}
+async function refreshChat() {
+  paintChatList();
+  if (!state.chatKey) return;
+  const pane = document.querySelector('[data-chat-pane]');
+  if (!pane) return;
+  try {
+    const data = await api(`/staff/chats/${encodeURIComponent(state.chatKey)}`);
+    const sameCount = state.chat && state.chat.key === data.chat.key && state.chat.messages.length === data.messages.length;
+    state.chat = { key: data.chat.key, ...data };
+    if (sameCount && pane.querySelector('[data-chat-form]')) return; // nothing new: keep the draft untouched
+    const draft = pane.querySelector('[data-chat-form] textarea')?.value || '';
+    const ctx = pane.querySelector('[data-chat-form] select')?.value || '';
+    pane.innerHTML = `
+      <header class="chat-head"><div><b>${esc(who(data.chat))}</b><div class="muted">Idioma del huésped: ${esc((data.chat.lang || 'es').toUpperCase())}</div></div></header>
+      <div class="chat-body">
+        <div class="chat-msgs" data-msgs>${data.messages
+          .map((m) => {
+            const time = fmt(m.at);
+            const req = data.requests.find((r) => r.id === m.requestId);
+            const reqLabel = req ? `${TYPE_LABEL[req.type] || req.type}` : '';
+            if (m.author === 'system') return `<div class="msg sys">${icon('info', 'sm')} ${esc(sysLabel(m.body))}${reqLabel ? ` · <b>${esc(reqLabel)}</b>` : ''} <span>${esc(time)}</span></div>`;
+            return `<div class="msg ${m.author === 'staff' ? 'mine' : 'theirs'}">
+              ${m.author === 'staff' ? `<div class="who">${esc(m.staffName || 'Recepción')}</div>` : ''}
+              ${reqLabel ? `<div class="ref">${icon('reply', 'sm')} ${esc(reqLabel)}</div>` : ''}
+              <div class="body">${esc(m.body)}</div><div class="time">${esc(time)}</div></div>`;
+          })
+          .join('')}</div>
+        <aside class="chat-reqs"><h4>Solicitudes de este huésped</h4>${data.requests.length
+          ? data.requests.map((r) => `<div class="mini-req ${r.status}"><b>${esc(TYPE_LABEL[r.type] || r.type)}</b><span class="badge ${r.status}">${esc(STATUS_LABEL[r.status])}</span>${r.when ? `<div class="muted">${esc(fmtLocal(r.when))}</div>` : ''}</div>`).join('')
+          : '<p class="muted">Ninguna.</p>'}</aside>
+      </div>
+      <form class="chat-form" data-chat-form>
+        <select class="sel">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
+        <textarea rows="2" placeholder="Escribe al huésped… (Enter envía, Mayús+Enter salto de línea)">${esc(draft)}</textarea>
+        <button class="btn primary" type="submit">${icon('send')} Enviar</button>
+      </form>`;
+    const msgs = pane.querySelector('[data-msgs]');
+    msgs.scrollTop = msgs.scrollHeight;
+  } catch (err) {
+    if (err.status === 404) state.chatKey = null;
+  }
+}
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('[data-open-chat]');
+  if (!b) return;
+  state.chatKey = b.dataset.openChat;
+  state.chat = null;
+  refreshChat().then(refreshChatList).then(paintChatList);
+});
+document.addEventListener('submit', async (e) => {
+  const form = e.target.closest('[data-chat-form]');
+  if (!form) return;
+  e.preventDefault();
+  const ta = form.querySelector('textarea');
+  const body = ta.value.trim();
+  if (!body) return;
+  const requestId = form.querySelector('select').value || undefined;
+  try {
+    await api(`/staff/chats/${encodeURIComponent(state.chatKey)}`, { method: 'POST', body: { body, requestId } });
+    ta.value = '';
+    state.chat = null;
+    await refreshChat();
+    await refreshChatList();
+    paintChatList();
+    document.querySelector('[data-chat-form] textarea')?.focus();
+  } catch (err) {
+    toast(err.message, 'err');
+  }
+});
+document.addEventListener('keydown', (e) => {
+  const ta = e.target.closest('[data-chat-form] textarea');
+  if (ta && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    ta.form.requestSubmit();
+  }
+});
 
 shell();
 refresh();
