@@ -26,6 +26,11 @@ import QRCode from 'qrcode';
 import { hashPassword, verifyPassword, createSessions } from './auth.js';
 import { uid, token as newToken, J, P, hotelPublic, serviceRow, actionRow, poiRow, requestRow } from './db.js';
 import { createNotifier } from './notify.js';
+import { createChat } from './chat.js';
+import { createWeather } from './weather.js';
+import { createMedia } from './media.js';
+import { createStats } from './stats.js';
+import { createTransit } from './gtfs.js';
 
 const LANGS = ['es', 'en', 'fr', 'de'];
 const STATUSES = ['pending', 'confirmed', 'done', 'rejected'];
@@ -33,11 +38,18 @@ const clean = (v, max = 500) => String(v ?? '').trim().slice(0, max);
 const bool = (v) => (v === true || v === 1 || v === '1' || v === 'true' ? 1 : 0);
 const num = (v, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
 
-export function createApi({ db, secret, secureCookies = false, publicUrl = '' }) {
+export function createApi({ db, secret, secureCookies = false, publicUrl = '', dataDir = 'data', fetchImpl }) {
   const app = express.Router();
   const sessions = createSessions({ secret });
   const notifier = createNotifier();
-  app.use(express.json({ limit: '256kb' }));
+  const jsonSmall = express.json({ limit: '256kb' });
+  // Photo uploads carry their own, larger body limit (see media.js).
+  app.use((req, res, next) => (req.path === '/admin/upload' ? next() : jsonSmall(req, res, next)));
+  const chat = createChat({ db });
+  const weather = createWeather(fetchImpl ? { fetchImpl } : {});
+  const media = createMedia({ dataDir });
+  const stats = createStats({ db });
+  const transit = createTransit({ dataDir });
 
   // ---------- helpers ----------
   const hotelBySlugStmt = db.prepare('SELECT * FROM hotels WHERE slug = ? AND active = 1');
@@ -105,10 +117,17 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
       stayId = s?.id || null;
     }
     const id = uid();
-    db.prepare(`INSERT INTO requests (id, hotel_id, stay_id, room, type, name, when_at, details, lang) VALUES (?,?,?,?,?,?,?,?,?)`).run(
-      id, h.id, stayId, room, clean(b.type, 40) || 'other', clean(b.name, 80), clean(b.when, 40), clean(b.details), LANGS.includes(b.lang) ? b.lang : 'es',
+    const lang = LANGS.includes(b.lang) ? b.lang : 'es';
+    const guestKey = chat.validKey(b.guestKey) ? b.guestKey : '';
+    db.prepare(`INSERT INTO requests (id, hotel_id, stay_id, room, type, name, when_at, details, lang, guest_key) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
+      id, h.id, stayId, room, clean(b.type, 40) || 'other', clean(b.name, 80), clean(b.when, 40), clean(b.details), lang, guestKey,
     );
     logEvent(id, null, 'created');
+    if (guestKey && chat.ensure({ key: guestKey, hotelId: h.id, room, name: clean(b.name, 80), stayId, lang })) {
+      // Shown to both sides as "New request: …"; guest's own copy stays read.
+      chat.post({ key: guestKey, hotelId: h.id, author: 'system', requestId: id, body: 'created' });
+      db.prepare('UPDATE conversations SET unread_guest = MAX(0, unread_guest - 1), unread_staff = unread_staff + 1 WHERE key = ?').run(guestKey);
+    }
     const request = requestRow(requestWithAssignee(id));
     notifier.send({ event: 'created', hotel: hotelPublic(h), hotelRow: h, request });
     res.status(201).json({ request });
@@ -170,13 +189,18 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
     const r = db.prepare('SELECT * FROM requests WHERE id = ? AND hotel_id = ?').get(req.params.id, req.hotelId);
     if (!r) return res.status(404).json({ error: 'not found' });
     const b = req.body || {};
+    const toGuest = r.guest_key && db.prepare('SELECT 1 FROM conversations WHERE key = ? AND hotel_id = ?').get(r.guest_key, req.hotelId);
     if (STATUSES.includes(b.status) && b.status !== r.status) {
       db.prepare(`UPDATE requests SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(b.status, r.id);
       logEvent(r.id, req.user.id, 'status', b.status);
+      chat.markFirstResponse(r.id);
+      if (toGuest) chat.post({ key: r.guest_key, hotelId: req.hotelId, author: 'system', requestId: r.id, body: `status:${b.status}` });
     }
-    if (b.note !== undefined) {
+    if (b.note !== undefined && clean(b.note) !== r.note) {
       db.prepare(`UPDATE requests SET note = ?, updated_at = datetime('now') WHERE id = ?`).run(clean(b.note), r.id);
       logEvent(r.id, req.user.id, 'note', clean(b.note));
+      chat.markFirstResponse(r.id);
+      if (toGuest && clean(b.note)) chat.post({ key: r.guest_key, hotelId: req.hotelId, author: 'staff', userId: req.user.id, requestId: r.id, body: clean(b.note) });
     }
     if (b.assignedTo !== undefined) {
       const assignee = b.assignedTo ? db.prepare('SELECT id, name FROM users WHERE id = ? AND hotel_id = ?').get(b.assignedTo, req.hotelId) : null;
@@ -238,6 +262,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
       num(b.lat, h.lat), num(b.lon, h.lon), J((Array.isArray(b.langs) ? b.langs : LANGS).filter((l) => LANGS.includes(l))),
       J(b.reception ?? {}), J(b.wifi ?? {}), J(b.welcomeView ?? {}), J(b.theme ?? {}), clean(b.taxiPhone, 40), clean(b.webhookUrl, 300), clean(b.notifyEmail, 120), h.id,
     );
+    if (b.photo !== undefined) db.prepare('UPDATE hotels SET photo = ? WHERE id = ?').run(clean(b.photo, 400), h.id);
     res.json({ hotel: hotelPublic(hotelById.get(h.id)) });
   });
 
@@ -245,7 +270,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
   const TABLES = {
     services: {
       row: serviceRow,
-      cols: (b) => ({ sort: num(b.sort), icon: clean(b.icon, 40) || 'room_service', category: clean(b.category, 30) || 'leisure', name_json: J(b.name || {}), desc_json: J(b.desc || {}), hours_json: J(b.hours || {}), open_json: J(b.open ?? null), bookable: bool(b.bookable), active: b.active === undefined ? 1 : bool(b.active) }),
+      cols: (b) => ({ sort: num(b.sort), icon: clean(b.icon, 40) || 'room_service', category: clean(b.category, 30) || 'leisure', name_json: J(b.name || {}), desc_json: J(b.desc || {}), hours_json: J(b.hours || {}), open_json: J(b.open ?? null), bookable: bool(b.bookable), active: b.active === undefined ? 1 : bool(b.active), photo: clean(b.photo, 400) }),
     },
     actions: {
       row: actionRow,
@@ -253,7 +278,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
     },
     pois: {
       row: poiRow,
-      cols: (b) => ({ sort: num(b.sort), key: clean(b.key, 40) || uid(), cat: clean(b.cat, 30) || 'monument', lat: num(b.lat), lon: num(b.lon), minutes: num(b.minutes, 60), best_json: J(Array.isArray(b.best) ? b.best : ['morning', 'afternoon']), priority: num(b.priority, 5), name_json: J(b.name || {}), tag_json: J(b.tag || {}), desc_json: J(b.desc || {}), tasks_json: J(b.tasks || {}), actions_json: J(Array.isArray(b.actions) ? b.actions : []), active: b.active === undefined ? 1 : bool(b.active) }),
+      cols: (b) => ({ sort: num(b.sort), key: clean(b.key, 40) || uid(), cat: clean(b.cat, 30) || 'monument', lat: num(b.lat), lon: num(b.lon), minutes: num(b.minutes, 60), best_json: J(Array.isArray(b.best) ? b.best : ['morning', 'afternoon']), priority: num(b.priority, 5), name_json: J(b.name || {}), tag_json: J(b.tag || {}), desc_json: J(b.desc || {}), tasks_json: J(b.tasks || {}), actions_json: J(Array.isArray(b.actions) ? b.actions : []), active: b.active === undefined ? 1 : bool(b.active), photo: clean(b.photo, 400), indoor: bool(b.indoor) }),
     },
     rooms: {
       row: (r) => ({ id: r.id, number: r.number, floor: r.floor, token: r.token, active: !!r.active, url: `${publicUrl}/?h=__SLUG__&r=${r.token}` }),
@@ -390,11 +415,18 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '' })
     res.json({ ok: true });
   });
 
+  chat.mount(app, { hotelBySlug, staff });
+  weather.mount(app, { hotelBySlug });
+  media.mount(app, { admin });
+  stats.mount(app, { hotelBySlug, admin });
+  transit.mount(app, { hotelBySlug, admin });
+
   app.use((err, req, res, next) => {
     if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid JSON' });
     console.error('[concierge api]', err);
     res.status(500).json({ error: 'server error' });
   });
 
+  app.media = media;
   return app;
 }
