@@ -8,6 +8,8 @@ services:
       - CONCIERGE_DB=/data/concierge.sqlite
     volumes:
       - concierge-data:/data
+      # Official GTFS timetables (Metro de Granada, urban bus): drop the .zip files in ./data/gtfs
+      - ./data/gtfs:/data/gtfs:ro
     expose: ["4180"]
 
   caddy:

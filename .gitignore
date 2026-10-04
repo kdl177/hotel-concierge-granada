@@ -26,3 +26,6 @@ data/concierge-requests.json.tmp
 
 # Concierge database
 data/concierge.sqlite*
+
+# Local runtime data (DB, uploads, GTFS downloads) — never committed
+/data/

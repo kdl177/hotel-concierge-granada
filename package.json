@@ -36,17 +36,16 @@
     "format": "node scripts/format.mjs --write",
     "format:check": "node scripts/format.mjs --check",
     "dev": "vite",
-    "dev:concierge": "vite --port 4180 --strictPort --open /concierge.html",
     "dev:secure": "./scripts/dev-secure.sh",
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
-    "start": "vite build && node server/app/main.js",
     "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
     "qa:transit": "node scripts/qa-transit.mjs",
+    "start": "vite build && node server/app/main.js",
     "serve": "node server/app/main.js"
   },
   "dependencies": {
@@ -56,13 +55,13 @@
     "@meri-imperiumi/eccodes-wasm": "^2.48.2",
     "cesium": "^1.124.0",
     "egm96-universal": "^1.1.1",
+    "express": "^5.2.1",
     "hls.js": "^1.7.3",
     "mgrs": "^2.1.0",
+    "nodemailer": "^7.0.13",
     "pbf": "^5.1.2",
-    "satellite.js": "^6.0.2",
-    "express": "^5.2.1",
     "qrcode": "^1.5.4",
-    "nodemailer": "^7.0.0"
+    "satellite.js": "^6.0.2"
   },
   "devDependencies": {
     "prettier": "3.9.6",
