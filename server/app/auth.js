@@ -24,7 +24,7 @@ export function createSessions({ secret, ttlMs = 12 * 3600 * 1000, cookieName = 
   const sign = (payload) => createHmac('sha256', secret).update(payload).digest('base64url');
 
   function issue(user) {
-    const body = b64({ uid: user.id, role: user.role, hid: user.hotel_id, exp: Date.now() + ttlMs });
+    const body = b64({ uid: user.id, sv: user.session_version || 0, exp: Date.now() + ttlMs });
     return `${body}.${sign(body)}`;
   }
   function read(tokenValue) {

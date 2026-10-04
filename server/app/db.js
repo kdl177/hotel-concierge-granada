@@ -111,6 +111,14 @@ function migrate(db) {
   add('pois', 'indoor', 'INTEGER DEFAULT 0');
   add('services', 'photo', "TEXT DEFAULT ''");
   add('hotels', 'photo', "TEXT DEFAULT ''");
+  // Account security: session revocation, forced password change, audit.
+  add('users', 'session_version', 'INTEGER DEFAULT 0');
+  add('users', 'must_change_password', 'INTEGER DEFAULT 0');
+  add('users', 'last_login_at', 'TEXT');
+  db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
+    token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at INTEGER NOT NULL, used_at INTEGER
+  )`);
   // Databases seeded before the "indoor" column existed: mark the bundled covered places once.
   if (!db.prepare('SELECT 1 FROM pois WHERE indoor = 1 LIMIT 1').get()) {
     db.prepare(`UPDATE pois SET indoor = 1 WHERE key IN (${INDOOR_KEYS.map(() => '?').join(',')})`).run(...INDOOR_KEYS);
