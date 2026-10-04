@@ -36,7 +36,7 @@ test('bootstrap superadmin must change the default password before doing anythin
   assert.equal((await c.get('/api/admin/hotel')).status, 200);
   const stale = client(app.base);
   stale.cookie = old;
-  assert.equal((await stale.get('/api/auth/me')).status, 401, 'sessions issued before the change are revoked');
+  assert.equal((await stale.get('/api/auth/me')).data.user, null, 'sessions issued before the change are revoked');
 });
 
 test('A-01: a hotel admin cannot see, edit or delete the superadmin', async () => {
@@ -74,7 +74,7 @@ test('admin reset of a user forces a new password and closes their sessions', as
   const id = (await staff.get('/api/auth/me')).data.user.id;
   assert.equal((await sa.put(`/api/admin/users/${id}`, { password: 'weak' })).status, 400);
   assert.equal((await sa.put(`/api/admin/users/${id}`, { password: 'NuevaTemporal99' })).status, 200);
-  assert.equal((await staff.get('/api/auth/me')).status, 401);
+  assert.equal((await staff.get('/api/auth/me')).data.user, null);
   const again = client(app.base);
   const r = await again.post('/api/auth/login', { email: 'camarera@luna.es', password: 'NuevaTemporal99' });
   assert.equal(r.data.user.mustChangePassword, true);
@@ -86,7 +86,7 @@ test('logout-all revokes every session of the account', async () => {
   await a.post('/api/auth/login', { email: 'jefe@luna.es', password: STRONG + 'admin' });
   await b.post('/api/auth/login', { email: 'jefe@luna.es', password: STRONG + 'admin' });
   assert.equal((await a.post('/api/auth/logout-all')).status, 200);
-  assert.equal((await b.get('/api/auth/me')).status, 401);
+  assert.equal((await b.get('/api/auth/me')).data.user, null);
 });
 
 test('A-04: login is rate limited per account and IP', async () => {
@@ -188,7 +188,7 @@ test('A-14: cross-site state changes are refused', async () => {
   await sa.post('/api/auth/login', { email: 'admin@hotel.local', password: STRONG });
   assert.equal((await sa.post('/api/auth/logout-all', {}, { Origin: 'https://evil.example' })).status, 403);
   assert.equal((await sa.post('/api/auth/logout-all', {}, { 'Sec-Fetch-Site': 'cross-site' })).status, 403);
-  assert.equal((await sa.get('/api/auth/me')).status, 200, 'still signed in');
+  assert.ok((await sa.get('/api/auth/me')).data.user, 'still signed in');
 });
 
 test('security headers are present', async () => {
@@ -237,4 +237,17 @@ test('anonymous usage stats and admin dashboard', async () => {
   const s = await sa.get('/api/admin/stats?days=7');
   assert.equal(s.status, 200);
   assert.ok(s.data.topPois.some((p) => p.k === 'alhambra'));
+});
+
+test('weather offline: the widget is reported unavailable without an HTTP error', async () => {
+  const r = await client(app.base).get('/api/h/default/weather');
+  assert.equal(r.status, 200);
+  assert.equal(r.data.available, false);
+});
+
+test('transit without timetables loaded says "not configured"', async () => {
+  const r = await client(app.base).post('/api/h/default/transit', { origin: { lat: 37.17, lon: -3.6 }, destination: { lat: 37.18, lon: -3.59 } });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.configured, false);
+  assert.equal((await client(app.base).post('/api/h/default/transit', { origin: { lat: 999, lon: 0 }, destination: {} })).status, 200, 'no feeds → no validation needed');
 });
