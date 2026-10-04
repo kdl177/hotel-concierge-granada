@@ -27,13 +27,16 @@ import {
   fetchWeather,
   track,
 } from './services.js';
+import { glyph } from '../design/icons.js';
 
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 // Icon names are ligatures of the symbol font: only [a-z0-9_] ever reaches the DOM.
-const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${/^[a-z0-9_]{1,40}$/.test(String(name)) ? name : 'help'}</span>`;
+const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
 const telHref = (n) => `tel:${String(n ?? '').replace(/[^0-9+]/g, '')}`;
 
+/** Custom eight-point "Nasrid star" seal used on verified data (official timetables). */
+const sealSvg = () => '<svg class="seal-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 4.2 4.8-1.1-1.1 4.8 4.2 2.6-4.2 2.6 1.1 4.8-4.8-1.1L12 22.5l-2.6-4.2-4.8 1.1 1.1-4.8L1.5 12l4.2-2.6-1.1-4.8 4.8 1.1z" fill="currentColor"/><path d="M8.2 12.3l2.4 2.4 5.2-5.2" fill="none" stroke="var(--seal-ink,#14110a)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const VEHICLE_ICON = { BUS: 'directions_bus', SUBWAY: 'subway', TRAM: 'tram', LIGHT_RAIL: 'tram', RAIL: 'train', HEAVY_RAIL: 'train', METRO_RAIL: 'subway' };
 const SNAPS = ['collapsed', 'half', 'full'];
 
@@ -138,6 +141,7 @@ export function createUi({ root, globe, config, room = null }) {
     let html = '';
     if (v.name === 'home') html = renderHome();
     else if (v.name === 'search') html = renderSearch(v);
+    else if (v.name === 'catalog') html = renderCatalog(v);
     else if (v.name === 'place') html = renderPlace(v);
     else if (v.name === 'hotel') html = renderHotel();
     else if (v.name === 'service') html = renderService(v);
@@ -145,8 +149,8 @@ export function createUi({ root, globe, config, room = null }) {
     panel.scrollTop = 0;
     if (v.name === 'place') loadRoute(v);
     renderTasks();
-    tabs.querySelector('[data-tab="explore"] span').textContent = t('explore');
-    tabs.querySelector('[data-tab="tasks"] span').textContent = t('tasks');
+    tabs.querySelector('[data-tab="explore"] span:not(.msym)').textContent = t('explore');
+    tabs.querySelector('[data-tab="tasks"] span:not(.msym)').textContent = t('tasks');
   }
 
   function header(title, sub = '', extra = '') {
@@ -163,7 +167,14 @@ export function createUi({ root, globe, config, room = null }) {
     </label>`;
   }
 
-  function poiCard(p, { wide = false } = {}) {
+  /** Seals shown on places: each one is backed by real data (see DECISIONES D-01). */
+  function poiBadges(p, moment = dayMoment()) {
+    const out = [];
+    if (p.best?.includes(moment)) out.push(`<span class="cg-seal ideal">${icon('schedule')}${esc(t('badgeIdeal'))}</span>`);
+    if (p.indoor) out.push(`<span class="cg-seal indoor">${icon('roofing')}${esc(t('badgeIndoor'))}</span>`);
+    return out.length ? `<div class="cg-seals">${out.join('')}</div>` : '';
+  }
+  function poiCard(p, { wide = false, badges = false } = {}) {
     const cat = POI_CATEGORIES[p.cat] || { icon: 'place' };
     const d = distanceFromHotelM(p);
     return `<button class="cg-card ${wide ? 'wide' : ''} ${p.photo ? 'has-photo' : ''}" data-action="open-poi" data-id="${esc(p.id)}">
@@ -171,6 +182,7 @@ export function createUi({ root, globe, config, room = null }) {
       <div class="cg-card-body">
         <div class="cg-card-title">${esc(L(p.name))}</div>
         <div class="cg-card-meta"><span class="cg-tag">${esc(L(p.tag))}</span> · ${esc(formatDistance(d, t))} · ${esc(formatDuration(p.minutes * 60, t))}</div>
+        ${badges ? poiBadges(p) : ''}
       </div>
       ${state.plan.has(p.id) ? icon('bookmark', 'cg-plan-ico') : ''}${icon('chevron_right', 'cg-chev')}
     </button>`;
@@ -247,21 +259,48 @@ export function createUi({ root, globe, config, room = null }) {
       <div class="cg-hero"><h1>${esc(t('welcome'))}</h1><p>${esc(t('tagline'))}</p></div>
       ${weatherCard()}
       ${searchBox()}
-      <h3>${esc(t('suggestions'))} <span class="cg-moment">· ${esc(t(moment))}</span></h3>
+      <h2 class="cg-sec">${esc(t('suggestions'))} <span class="cg-moment">· ${esc(t(moment))}</span></h2>
       <div class="cg-row">${suggested.map((p) => poiCard(p)).join('')}</div>
-      <h3>${esc(t('hotel'))} ${openNow.length ? `<span class="cg-moment">· ${esc(t('openNow'))}</span>` : ''}</h3>
+      <h2 class="cg-sec">${esc(t('hotel'))} ${openNow.length ? `<span class="cg-moment">· ${esc(t('openNow'))}</span>` : ''}</h2>
       <div class="cg-chips">
         ${openNow.map((s) => `<button class="cg-chip" data-action="open-service" data-id="${esc(s.id)}">${icon(s.icon)} ${esc(L(s.name))}</button>`).join('')}
         <button class="cg-chip accent" data-action="open-hotel">${icon('room_service')} ${esc(t('all'))}</button>
       </div>
-      <h3>${esc(t('explore'))}</h3>
+      <h2 class="cg-sec">${esc(t('explore'))}</h2>
       <div class="cg-chips">
-        ${cats.map(([k, c]) => `<button class="cg-chip" data-action="filter-cat" data-cat="${k}">${icon(c.icon)} ${esc(L(c.label))}</button>`).join('')}
+        <button class="cg-chip accent" data-action="filter-cat" data-cat="all">${icon('apps')} ${esc(t('allPlaces'))} <span class="cg-count">${POIS.length}</span></button>
+        ${cats.map(([k, c]) => `<button class="cg-chip" data-action="filter-cat" data-cat="${esc(k)}">${icon(c.icon)} ${esc(L(c.label))}</button>`).join('')}
       </div>
-      <h3>${esc(t('nearHotel'))}</h3>
+      <h2 class="cg-sec">${esc(t('nearHotel'))}</h2>
       <div class="cg-list">${nearby.map((p) => poiCard(p, { wide: true })).join('')}</div>
       <div class="cg-foot">${esc(L(HOTEL.reception))} · <a href="${telHref(HOTEL.phone)}">${esc(HOTEL.phone)}</a></div>
     `;
+  }
+
+  function renderCatalog(v) {
+    const moment = dayMoment();
+    const cats = Object.entries(POI_CATEGORIES).filter(([k]) => POIS.some((p) => p.cat === k));
+    let list = POIS.filter((p) => (v.cat === 'all' || p.cat === v.cat) && (!v.now || p.best?.includes(moment)) && (!v.indoor || p.indoor));
+    list = v.sort === 'dist'
+      ? list.sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b))
+      : list.map((p) => [p, suggestScore(p, moment)]).sort((a, b) => b[1] - a[1]).map(([p]) => p);
+    const chip = (cat, label, ic) => `<button class="cg-chip ${v.cat === cat ? 'on' : ''}" data-action="catalog-cat" data-cat="${esc(cat)}" aria-pressed="${v.cat === cat}">${icon(ic)} ${esc(label)}</button>`;
+    const toggle = (key, label, ic) => `<button class="cg-chip toggle ${v[key] ? 'on' : ''}" data-action="catalog-toggle" data-key="${key}" aria-pressed="${!!v[key]}">${icon(ic)} ${esc(label)}</button>`;
+    const filtered = v.cat !== 'all' || v.now || v.indoor;
+    const title = v.cat === 'all' ? t('allPlaces') : L(POI_CATEGORIES[v.cat]?.label) || t('allPlaces');
+    return `${header(title, t('nPlaces', { n: list.length }))}
+      <div class="cg-filters" role="group" aria-label="${esc(t('category'))}">
+        ${chip('all', t('all'), 'apps')}${cats.map(([k, c]) => chip(k, L(c.label), c.icon)).join('')}
+      </div>
+      <div class="cg-filters" role="group" aria-label="${esc(t('filters'))}">
+        ${toggle('now', t('filterNow'), 'schedule')}${toggle('indoor', t('filterIndoor'), 'roofing')}
+        <span class="cg-seg" role="group" aria-label="Orden">
+          <button class="${v.sort !== 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="reco" aria-pressed="${v.sort !== 'dist'}">${esc(t('sortReco'))}</button><button class="${v.sort === 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="dist" aria-pressed="${v.sort === 'dist'}">${esc(t('sortDist'))}</button>
+        </span>
+      </div>
+      ${list.length
+        ? `<div class="cg-list" aria-live="polite">${list.map((p) => poiCard(p, { wide: true, badges: true })).join('')}</div>`
+        : `<div class="cg-empty">${icon('travel_explore')}<p>${esc(t('noMatches'))}</p>${filtered ? `<button class="cg-btn ghost" data-action="catalog-clear">${esc(t('clearFilters'))}</button>` : ''}</div>`}`;
   }
 
   function renderSearch(v) {
@@ -324,7 +363,7 @@ export function createUi({ root, globe, config, room = null }) {
     ];
     const inPlan = v.poi && state.plan.has(v.poi.id);
     return `
-      ${header(p.title, v.poi ? L(v.poi.tag) : v.place.address || '', v.poi ? `<button class="cg-plan-btn ${inPlan ? 'on' : ''}" data-action="toggle-plan" data-id="${v.poi.id}" title="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}">${icon(inPlan ? 'bookmark' : 'bookmark_add')}</button>` : '')}
+      ${header(p.title, v.poi ? L(v.poi.tag) : v.place.address || '', v.poi ? `<button class="cg-plan-btn ${inPlan ? 'on' : ''}" data-action="toggle-plan" data-id="${esc(v.poi.id)}" title="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}" aria-label="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}" aria-pressed="${inPlan}">${icon(inPlan ? 'bookmark' : 'bookmark_add')}</button>` : '')}
       ${v.poi?.photo ? `<img class="cg-hero-photo" src="${esc(v.poi.photo)}" alt="${esc(p.title)}" />` : ''}
       ${v.poi ? `<p class="cg-desc">${esc(L(v.poi.desc))}</p>` : ''}
       <div class="cg-facts">
@@ -415,7 +454,7 @@ export function createUi({ root, globe, config, room = null }) {
                 <div class="cg-plan-top">
                   <button class="cg-plan-title" data-action="open-poi" data-id="${esc(p.id)}">${icon(POI_CATEGORIES[p.cat]?.icon || 'place')}<b>${esc(L(p.name))}</b></button>
                   <span class="cg-muted">${esc(t('doneCount', { d: done, n: tasks.length }))}</span>
-                  <button class="cg-x" data-action="toggle-plan" data-id="${p.id}" title="${esc(t('removeFromPlan'))}">${icon('close')}</button>
+                  <button class="cg-x" data-action="toggle-plan" data-id="${esc(p.id)}" title="${esc(t('removeFromPlan'))}" aria-label="${esc(t('removeFromPlan'))}: ${esc(L(p.name))}">${icon('close')}</button>
                 </div>
                 ${p.actions?.length ? `<div class="cg-acts">${p.actions.map((a) => actionButton(a, p)).join('')}</div>` : ''}
                 ${tasksChecklist(p)}
@@ -430,7 +469,7 @@ export function createUi({ root, globe, config, room = null }) {
           (p) => `<div class="cg-card wide static">
             <div class="cg-card-icon">${icon(POI_CATEGORIES[p.cat]?.icon || 'place')}</div>
             <div class="cg-card-body"><div class="cg-card-title">${esc(L(p.name))}</div><div class="cg-card-meta">${esc(L(p.tag))}</div></div>
-            <button class="cg-mini" data-action="toggle-plan" data-id="${p.id}">${icon('add')}</button>
+            <button class="cg-mini" data-action="toggle-plan" data-id="${esc(p.id)}" aria-label="${esc(t('addToPlan'))}: ${esc(L(p.name))}" title="${esc(t('addToPlan'))}">${icon('add')}</button>
           </div>`,
         )
         .join('')}</div>
@@ -731,7 +770,7 @@ export function createUi({ root, globe, config, room = null }) {
         </div>
         ${r.leaveAt ? `<div class="cg-leave">${icon('door_open')} ${esc(t('leaveHotelAt', { t: formatTime(r.leaveAt, lang) }))}${data.walkS ? ` <span>· ${esc(t('orWalk', { n: Math.round(data.walkS / 60) }))}</span>` : ''}</div>` : ''}
         <button class="cg-btn" data-action="guide">${icon('navigation')} ${esc(t('guide'))}</button>
-        ${data.source === 'gtfs' ? `<div class="cg-src">${icon('verified')} ${esc(t('officialTimes'))}</div>` : ''}
+        ${data.source === 'gtfs' ? `<div class="cg-src"><span class="cg-seal official" title="${esc(t('officialHint'))}">${sealSvg()}${esc(t('badgeOfficial'))}</span><span>${esc(t('officialTimes'))}</span></div>` : ''}
         <ol class="cg-tl">
           <li class="cg-tl-item hotel"><span class="cg-tl-dot"></span><div><b>${esc(HOTEL.name)}</b></div></li>
           ${r.legs
@@ -948,7 +987,23 @@ export function createUi({ root, globe, config, room = null }) {
         track('service', L(s.name, 'es'));
         go({ name: 'service', service: s });
       }
-    } else if (a === 'filter-cat') go({ name: 'search', cat: el.dataset.cat });
+    } else if (a === 'filter-cat') go({ name: 'catalog', cat: el.dataset.cat || 'all', sort: 'reco' });
+    else if (a === 'catalog-cat' && state.view.name === 'catalog') {
+      state.view.cat = el.dataset.cat;
+      render();
+      panel.querySelector(`[data-action="catalog-cat"][data-cat="${CSS.escape(el.dataset.cat)}"]`)?.focus();
+    } else if (a === 'catalog-toggle' && state.view.name === 'catalog') {
+      state.view[el.dataset.key] = !state.view[el.dataset.key];
+      render();
+      panel.querySelector(`[data-action="catalog-toggle"][data-key="${el.dataset.key}"]`)?.focus();
+    } else if (a === 'catalog-sort' && state.view.name === 'catalog') {
+      state.view.sort = el.dataset.sort;
+      render();
+      panel.querySelector(`[data-action="catalog-sort"][data-sort="${el.dataset.sort}"]`)?.focus();
+    } else if (a === 'catalog-clear' && state.view.name === 'catalog') {
+      Object.assign(state.view, { cat: 'all', now: false, indoor: false });
+      render();
+    }
     else if (a === 'mode') {
       state.routeMode = el.dataset.mode;
       stopGuide();
