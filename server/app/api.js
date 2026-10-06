@@ -175,6 +175,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     const id = uid();
     const lang = LANGS.includes(b.lang) ? b.lang : 'es';
     const guestKey = chat.validKey(b.guestKey) ? b.guestKey : '';
+    if (guestKey && chat.isBlocked(guestKey)) return res.status(403).json({ error: 'blocked' });
     db.prepare(`INSERT INTO requests (id, hotel_id, stay_id, room, type, name, when_at, details, lang, guest_key) VALUES (?,?,?,?,?,?,?,?,?,?)`).run(
       id, h.id, stayId, room, type, clean(b.name, 80), clean(b.when, 40), clean(b.details, 1000), lang, guestKey,
     );

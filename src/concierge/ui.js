@@ -105,6 +105,15 @@ export function createUi({ root, globe, config, room = null }) {
   globe.addMarker({ id: 'hotel', lat: HOTEL.lat, lon: HOTEL.lon, label: HOTEL.name, kind: 'hotel' });
   for (const p of POIS) globe.addMarker({ id: p.id, lat: p.lat, lon: p.lon, label: L(p.name), kind: 'poi' });
 
+  /** Guest-friendly text for a failed send (rate limit, blocked device, bad room…). */
+  function failText(error) {
+    const m = String(error?.message || '');
+    if (/too many|limit/.test(m)) return t('tooMany');
+    if (m === 'blocked') return t('blockedMsg');
+    if (/room/.test(m)) return t('invalidRoom');
+    return t('requestFailed');
+  }
+
   // ---------- navigation ----------
   function go(view, { push = true } = {}) {
     if (push) state.stack.push(state.view);
@@ -1063,8 +1072,8 @@ export function createUi({ root, globe, config, room = null }) {
         state.chat.requestId = null;
         renderChat();
         sidePanel.querySelector('[data-role="chat-form"] textarea')?.focus();
-      } catch {
-        showToast(t('requestFailed'));
+      } catch (error) {
+        showToast(failText(error));
       } finally {
         state.chat.sending = false;
       }
@@ -1097,8 +1106,8 @@ export function createUi({ root, globe, config, room = null }) {
       banner.textContent = t('requestSent');
       root.appendChild(banner);
       setTimeout(() => banner.remove(), 4000);
-    } catch {
-      msg.textContent = t('requestFailed');
+    } catch (error) {
+      msg.textContent = failText(error);
       form.querySelector('[type="submit"]').disabled = false;
     }
   });

@@ -115,6 +115,8 @@ function migrate(db) {
   add('users', 'session_version', 'INTEGER DEFAULT 0');
   add('users', 'must_change_password', 'INTEGER DEFAULT 0');
   add('users', 'last_login_at', 'TEXT');
+  // Moderation: reception can block an abusive guest device (chat + requests).
+  add('conversations', 'blocked', 'INTEGER DEFAULT 0');
   db.exec(`CREATE TABLE IF NOT EXISTS password_resets (
     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     expires_at INTEGER NOT NULL, used_at INTEGER

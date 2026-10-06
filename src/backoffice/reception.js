@@ -1,5 +1,5 @@
 /** Reception screen: live request inbox, assignment, notes, history, stays. */
-import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, accountButton, bindAccount, toast, beep, modal, setHotelOverride } from './common.js';
+import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, accountButton, bindAccount, confirmDialog, errorText, toast, beep, modal, setHotelOverride } from './common.js';
 
 const root = document.getElementById('app');
 const state = { user: null, hotel: null, hotels: [], tab: 'inbox', filter: 'open', q: '', requests: [], counts: {}, users: [], stays: [], known: null, expanded: new Set(), events: new Map(), chats: [], chatUnread: 0, chatKey: null, chat: null, chatLastSeen: null };
@@ -271,6 +271,8 @@ async function refreshStays() {
 const who = (c) => `Hab. ${c.room || '—'}${c.guestName ? ` · ${c.guestName}` : ''}`;
 function sysLabel(body) {
   if (body === 'created') return 'Nueva solicitud';
+  if (body === 'blocked') return 'Dispositivo bloqueado por recepción';
+  if (body === 'unblocked') return 'Dispositivo desbloqueado';
   return `Estado: ${STATUS_LABEL[body.split(':')[1]] || body}`;
 }
 async function refreshChatList() {
@@ -325,7 +327,8 @@ async function refreshChat() {
     const draft = pane.querySelector('[data-chat-form] textarea')?.value || '';
     const ctx = pane.querySelector('[data-chat-form] select')?.value || '';
     pane.innerHTML = `
-      <header class="chat-head"><div><b>${esc(who(data.chat))}</b><div class="muted">Idioma del huésped: ${esc((data.chat.lang || 'es').toUpperCase())}</div></div></header>
+      <header class="chat-head"><div><b>${esc(who(data.chat))}</b>${data.chat.blocked ? ' <span class="badge rejected">Bloqueado</span>' : ''}<div class="muted">Idioma del huésped: ${esc((data.chat.lang || 'es').toUpperCase())}</div></div>
+        <button class="btn sm ${data.chat.blocked ? '' : 'no'}" data-block="${data.chat.blocked ? 0 : 1}" title="${data.chat.blocked ? 'Permitir de nuevo mensajes y solicitudes' : 'Impedir que este dispositivo envíe mensajes o solicitudes (spam, abuso)'}">${icon(data.chat.blocked ? 'lock_open' : 'block')} ${data.chat.blocked ? 'Desbloquear' : 'Bloquear dispositivo'}</button></header>
       <div class="chat-body">
         <div class="chat-msgs" data-msgs>${data.messages
           .map((m) => {
@@ -345,7 +348,7 @@ async function refreshChat() {
       </div>
       <form class="chat-form" data-chat-form>
         <select class="sel" aria-label="Asunto del mensaje">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
-        <textarea rows="2" placeholder="Escribe al huésped… (Enter envía, Mayús+Enter salto de línea)">${esc(draft)}</textarea>
+        <textarea rows="2" aria-label="Mensaje al huésped" maxlength="1000" placeholder="Escribe al huésped… (Enter envía, Mayús+Enter salto de línea)">${esc(draft)}</textarea>
         <button class="btn primary" type="submit">${icon('send')} Enviar</button>
       </form>`;
     const msgs = pane.querySelector('[data-msgs]');
@@ -354,6 +357,22 @@ async function refreshChat() {
     if (err.status === 404) state.chatKey = null;
   }
 }
+document.addEventListener('click', async (e) => {
+  const blk = e.target.closest('[data-block]');
+  if (!blk || !state.chatKey) return;
+  const block = blk.dataset.block === '1';
+  if (block && !(await confirmDialog('Este dispositivo no podrá enviar mensajes ni solicitudes hasta que lo desbloquees.', 'Bloquear'))) return;
+  try {
+    await api(`/staff/chats/${encodeURIComponent(state.chatKey)}/block`, { method: 'POST', body: { blocked: block } });
+    toast(block ? 'Dispositivo bloqueado' : 'Dispositivo desbloqueado');
+    state.chat = null;
+    await refreshChat();
+    await refreshChatList();
+    paintChatList();
+  } catch (err) {
+    toast(errorText(err), 'err');
+  }
+});
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-open-chat]');
   if (!b) return;
@@ -378,7 +397,7 @@ document.addEventListener('submit', async (e) => {
     paintChatList();
     document.querySelector('[data-chat-form] textarea')?.focus();
   } catch (err) {
-    toast(err.message, 'err');
+    toast(errorText(err), 'err');
   }
 });
 document.addEventListener('keydown', (e) => {

@@ -251,3 +251,20 @@ test('transit without timetables loaded says "not configured"', async () => {
   assert.equal(r.data.configured, false);
   assert.equal((await client(app.base).post('/api/h/default/transit', { origin: { lat: 999, lon: 0 }, destination: {} })).status, 200, 'no feeds → no validation needed');
 });
+
+test('moderation: reception can block and unblock an abusive guest device', async () => {
+  const g = client(app.base);
+  const key = guestKey(30);
+  await g.post('/api/h/default/chat', { key, body: 'spam spam', room: '103' });
+  const sa = client(app.base);
+  await sa.post('/api/auth/login', { email: 'admin@hotel.local', password: STRONG });
+  assert.equal((await sa.post(`/api/staff/chats/${key}/block`, { blocked: true })).data.blocked, true);
+  assert.equal((await g.post('/api/h/default/chat', { key, body: 'más spam' })).status, 403);
+  assert.equal((await g.post('/api/h/default/requests', { room: '103', type: 'other', guestKey: key })).status, 403);
+  assert.equal((await g.get(`/api/h/default/chat?key=${key}`)).data.blocked, true);
+  assert.equal((await sa.post(`/api/staff/chats/${key}/block`, { blocked: false })).data.blocked, false);
+  assert.equal((await g.post('/api/h/default/chat', { key, body: 'perdón' })).status, 201);
+  const mine = await g.get(`/api/h/default/chat?key=${key}`);
+  assert.ok(!mine.data.messages.some((m) => m.body === 'blocked' || m.body === 'unblocked'), 'moderation notes stay internal');
+  assert.equal((await client(app.base).post(`/api/staff/chats/${key}/block`, {})).status, 401);
+});

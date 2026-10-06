@@ -227,6 +227,8 @@ const API_ERRORS = {
   'webhook: host not found': 'No se encuentra el servidor del webhook',
   'image too large (max 3 MB)': 'Imagen demasiado grande (máx. 3 MB)',
   'file is not a valid image': 'El archivo no es una imagen válida',
+  'blocked': 'Este dispositivo está bloqueado',
+  'empty message': 'El mensaje está vacío',
 };
 export function errorText(err) {
   const m = String(err?.message || '');

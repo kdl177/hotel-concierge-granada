@@ -8,6 +8,8 @@
  *   Staff:  GET  /api/staff/chats                   GET  /api/staff/chats/:key?after=
  *           POST /api/staff/chats/:key { body, requestId }
  */
+import { createLimiter } from './security.js';
+
 const KEY_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_BODY = 1000;
 
@@ -22,7 +24,7 @@ export function createChat({ db }) {
     staff: db.prepare(`UPDATE conversations SET last_at = datetime('now'), unread_guest = unread_guest + 1 WHERE key = ?`),
     system: db.prepare(`UPDATE conversations SET last_at = datetime('now'), unread_guest = unread_guest + 1 WHERE key = ?`),
   };
-  const recent = new Map(); // key -> timestamps (anti-flood)
+  const flood = createLimiter({ windowMs: 60_000, max: 20 }); // per device key
 
   const validKey = (k) => KEY_RE.test(String(k || ''));
 
@@ -42,14 +44,9 @@ export function createChat({ db }) {
     return info.lastInsertRowid;
   }
 
-  function allowed(key) {
-    const now = Date.now();
-    const list = (recent.get(key) || []).filter((t) => now - t < 60_000);
-    if (list.length >= 20) return false;
-    list.push(now);
-    recent.set(key, list);
-    return true;
-  }
+  const allowed = (key) => flood.hit(String(key)).ok;
+  /** Has reception blocked this guest device? */
+  const isBlocked = (key) => !!db.prepare('SELECT blocked FROM conversations WHERE key = ?').get(String(key || ''))?.blocked;
 
   function messagesFor(key, after = 0) {
     return db
@@ -67,7 +64,9 @@ export function createChat({ db }) {
       if (!validKey(key)) return res.status(400).json({ error: 'invalid key' });
       const conv = getConv.get(key, h.id);
       if (!conv) return res.json({ messages: [], unread: 0 });
-      const messages = messagesFor(key, req.query.after);
+      if (conv.blocked) return res.json({ messages: [], unread: 0, blocked: true });
+      // Moderation notes are for staff only.
+      const messages = messagesFor(key, req.query.after).filter((m) => !(m.author === 'system' && (m.body === 'blocked' || m.body === 'unblocked')));
       const unread = conv.unread_guest;
       if (req.query.read === '1' && unread) db.prepare('UPDATE conversations SET unread_guest = 0 WHERE key = ?').run(key);
       res.json({ messages, unread });
@@ -77,6 +76,7 @@ export function createChat({ db }) {
       const h = hotelBySlug.get(req.params.slug);
       if (!h) return res.status(404).json({ error: 'hotel not found' });
       const b = req.body || {};
+      if (isBlocked(b.key)) return res.status(403).json({ error: 'blocked' });
       if (!allowed(b.key)) return res.status(429).json({ error: 'too many messages' });
       const conv = ensure({ key: b.key, hotelId: h.id, room: b.room, name: b.name, lang: b.lang });
       if (!conv) return res.status(400).json({ error: 'invalid key' });
@@ -98,7 +98,7 @@ export function createChat({ db }) {
       const unread = rows.reduce((n, c) => n + (c.unread_staff ? 1 : 0), 0);
       res.json({
         unread,
-        chats: rows.map((c) => ({ key: c.key, room: c.room, guestName: c.guest_name, lang: c.lang, unread: c.unread_staff, lastAt: c.last_at, lastBody: c.last_body, lastAuthor: c.last_author })),
+        chats: rows.map((c) => ({ key: c.key, room: c.room, guestName: c.guest_name, lang: c.lang, unread: c.unread_staff, lastAt: c.last_at, lastBody: c.last_body, lastAuthor: c.last_author, blocked: !!c.blocked })),
       });
     });
 
@@ -108,7 +108,7 @@ export function createChat({ db }) {
       if (conv.unread_staff) db.prepare('UPDATE conversations SET unread_staff = 0 WHERE key = ?').run(conv.key);
       const requests = db.prepare('SELECT id, type, status, when_at, details FROM requests WHERE guest_key = ? ORDER BY created_at DESC LIMIT 20').all(conv.key);
       res.json({
-        chat: { key: conv.key, room: conv.room, guestName: conv.guest_name, lang: conv.lang },
+        chat: { key: conv.key, room: conv.room, guestName: conv.guest_name, lang: conv.lang, blocked: !!conv.blocked },
         messages: messagesFor(conv.key, req.query.after),
         requests: requests.map((r) => ({ id: r.id, type: r.type, status: r.status, when: r.when_at, details: r.details })),
       });
@@ -125,9 +125,21 @@ export function createChat({ db }) {
     });
   }
 
+  function mountModeration(app, { staff }) {
+    app.post('/staff/chats/:key/block', staff, (req, res) => {
+      const conv = getConv.get(req.params.key, req.hotelId);
+      if (!conv) return res.status(404).json({ error: 'not found' });
+      const blocked = req.body?.blocked === false ? 0 : 1;
+      db.prepare('UPDATE conversations SET blocked = ? WHERE key = ?').run(blocked, conv.key);
+      // Audit trail inside the conversation (visible to staff only via system author).
+      insertMsg.run(conv.key, req.hotelId, 'system', req.user.id, null, blocked ? 'blocked' : 'unblocked');
+      res.json({ ok: true, blocked: !!blocked });
+    });
+  }
+
   function markFirstResponse(requestId) {
     if (requestId) db.prepare(`UPDATE requests SET first_response_at = COALESCE(first_response_at, datetime('now')) WHERE id = ?`).run(requestId);
   }
 
-  return { mount, ensure, post, validKey, markFirstResponse };
+  return { mount: (app, deps) => (mount(app, deps), mountModeration(app, deps)), ensure, post, validKey, markFirstResponse, isBlocked };
 }
