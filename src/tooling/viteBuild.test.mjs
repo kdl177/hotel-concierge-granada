@@ -63,10 +63,13 @@ test('root config retains existing named exports and standalone provider order',
     assert.equal(compatibility[name], value, name);
   const config = standaloneConfig({ mode: 'test' });
   assert.deepEqual(
-    config.plugins.slice(2, -1).map((plugin) => plugin.name),
+    config.plugins.slice(2, -3).map((plugin) => plugin.name),
     providers.localProviderPlugins().map((plugin) => plugin.name),
   );
-  assert.equal(config.plugins.at(-2).name, 'gev-key-setup');
+  assert.equal(config.plugins.at(-4).name, 'gev-key-setup');
+  // Hotel concierge: transit fallback and its own API, before the /api 404.
+  assert.equal(config.plugins.at(-3).name, 'google-routes-transit-proxy');
+  assert.equal(config.plugins.at(-2).name, 'concierge-api');
   assert.equal(config.plugins.at(-1).name, 'api-not-found');
 });
 

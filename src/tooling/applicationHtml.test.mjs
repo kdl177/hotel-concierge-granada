@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { expandApplicationHtml, APPLICATION_TEMPLATES } from '../../build/application-html.js';
 
 test('the standalone document expands every component once and preserves unique element ids', () => {
-  const source = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+  const source = readFileSync(new URL('../../console.html', import.meta.url), 'utf8');
   const html = expandApplicationHtml(source);
   assert.equal([...source.matchAll(/gev:template /g)].length, APPLICATION_TEMPLATES.length);
   assert.doesNotMatch(html, /gev:template/);

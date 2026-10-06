@@ -7,7 +7,7 @@ import { createBrowserViteConfig } from '../../build/vite.js';
 import { R820T_GAIN_STEPS_DB } from '../sdr/gain.js';
 
 const html = expandApplicationHtml(
-  readFileSync(new URL('../../index.html', import.meta.url), 'utf8'),
+  readFileSync(new URL('../../console.html', import.meta.url), 'utf8'),
 );
 const css = readFileSync(
   new URL('./styles/radio.css', import.meta.url),

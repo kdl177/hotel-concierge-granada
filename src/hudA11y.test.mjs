@@ -3,7 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const html = expandApplicationHtml(readFileSync(new URL('../console.html', import.meta.url), 'utf8'));
 const parameters = readFileSync(new URL('./ui/styleParameters.js', import.meta.url), 'utf8');
 
 // Focused markup guards; actual computed names are checked in Chromium.

@@ -551,7 +551,7 @@ test('the decision table is written down where the next editor will read it', ()
 // ── Markup, startup ordering, accessibility ─────────────────────────────────
 
 test('markup, startup ordering and accessibility remain pinned', () => {
-  const html = expandApplicationHtml(fs.readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+  const html = expandApplicationHtml(fs.readFileSync(new URL('../console.html', import.meta.url), 'utf8'));
   const startup = fs.readFileSync(new URL('./app/startupChrome.js', import.meta.url), 'utf8');
   const css = readStylesheet(new URL('../style.css', import.meta.url));
 

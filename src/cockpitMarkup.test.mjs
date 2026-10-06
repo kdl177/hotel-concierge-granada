@@ -28,7 +28,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const html = expandApplicationHtml(fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8'));
+const html = expandApplicationHtml(fs.readFileSync(path.join(ROOT, 'console.html'), 'utf8'));
 const ui = readShellSource();
 const css = readStylesheet(path.join(ROOT, 'style.css'));
 const sceneDirector = fs.readFileSync(path.join(ROOT, 'src', 'scenes', 'director.js'), 'utf8');

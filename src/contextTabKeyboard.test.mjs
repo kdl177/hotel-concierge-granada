@@ -13,7 +13,7 @@ import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-const html = expandApplicationHtml(readFileSync(new URL('../index.html', import.meta.url), 'utf8'));
+const html = expandApplicationHtml(readFileSync(new URL('../console.html', import.meta.url), 'utf8'));
 const ui = readShellSource();
 const css = readStylesheet(new URL('../style.css', import.meta.url));
 

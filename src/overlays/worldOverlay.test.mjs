@@ -464,7 +464,7 @@ test('lifecycle is idempotent and teardown removes listeners, observers, and DOM
   assert.deepEqual(root.children, [canvas],
     'the overlay root carries only the shared card canvas');
   assert.doesNotMatch(
-    expandApplicationHtml(readFileSync(new URL('../../index.html', import.meta.url), 'utf8')),
+    expandApplicationHtml(readFileSync(new URL('../../console.html', import.meta.url), 'utf8')),
     /world-overlay-detection-surface/,
     'the surface is runtime host-owned, not static markup',
   );

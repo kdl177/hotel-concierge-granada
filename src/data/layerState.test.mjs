@@ -515,7 +515,7 @@ test('a fresh boot starts 3D aircraft ON in proximity — codec, both layers, an
     'ui.js: and believes the mode is proximity',
   );
   const html = expandApplicationHtml(
-    await readFile(new URL('../../index.html', import.meta.url), 'utf8'),
+    await readFile(new URL('../../console.html', import.meta.url), 'utf8'),
   );
   assert.match(
     html,

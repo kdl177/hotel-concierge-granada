@@ -484,7 +484,7 @@ test('the keyboard focus ring survives on the ACTIVE chip', () => {
 
 test('the Visual Presets tray owns Map Source and the retired left panel is absent', () => {
   const html = expandApplicationHtml(
-    readFileSync(new URL('../index.html', import.meta.url), 'utf8'),
+    readFileSync(new URL('../console.html', import.meta.url), 'utf8'),
   );
   const ui = readShellSource();
 

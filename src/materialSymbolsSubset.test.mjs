@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const SRC_ROOT = fileURLToPath(new URL('.', import.meta.url));
 const REPO_ROOT = path.resolve(SRC_ROOT, '..');
-const INDEX_HTML = path.join(REPO_ROOT, 'index.html');
+const INDEX_HTML = path.join(REPO_ROOT, 'console.html');
 
 /** The glyph written as element text: `<span class="material-symbols-outlined">radar</span>`. */
 const SPAN_TEXT =
@@ -26,6 +26,9 @@ function sourceFiles(directory = SRC_ROOT) {
   const files = [];
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const absolute = path.join(directory, entry.name);
+    // The hotel concierge (guest app, backoffice) ships its own self-hosted icon
+    // font (tools/icons/build-icons.py), so it is not part of the console subset.
+    if (entry.isDirectory() && ['concierge', 'backoffice', 'design'].includes(entry.name) && directory === SRC_ROOT) continue;
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&
