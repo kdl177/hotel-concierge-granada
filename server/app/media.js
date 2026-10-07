@@ -34,7 +34,8 @@ export function createMedia({ dataDir }) {
   }
 
   function mount(app, { admin }) {
-    app.post('/admin/upload', express.json({ limit: '5mb' }), admin, (req, res) => {
+    // Auth first: anonymous clients never get a 5 MB body parsed.
+    app.post('/admin/upload', admin, express.json({ limit: '5mb' }), (req, res) => {
       try {
         res.status(201).json({ url: save(req.hotelId, req.body?.dataUrl) });
       } catch (error) {

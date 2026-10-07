@@ -203,14 +203,26 @@ export async function loadRoom(slug, token) {
   return res.ok ? res.json() : null;
 }
 
-/** Random per-device key that identifies this guest's conversation (no personal data). */
+/**
+ * Random per-device, per-hotel key that identifies this guest's conversation
+ * (no personal data). One key per hotel: conversations never cross hotels.
+ */
 export function guestKey() {
+  const name = `concierge.guestKey.${CTX.slug || 'default'}`;
   try {
-    let k = localStorage.getItem('concierge.guestKey');
+    let k = localStorage.getItem(name);
+    if (!k) {
+      // Devices from earlier versions keep their single key for the first hotel they use.
+      const legacy = localStorage.getItem('concierge.guestKey');
+      if (legacy && !localStorage.getItem('concierge.guestKey.claimed')) {
+        k = legacy;
+        localStorage.setItem('concierge.guestKey.claimed', CTX.slug || 'default');
+      }
+    }
     if (!k || !/^[A-Za-z0-9_-]{16,64}$/.test(k)) {
       k = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^A-Za-z0-9]/g, '').slice(0, 32).padEnd(20, '0');
-      localStorage.setItem('concierge.guestKey', k);
     }
+    localStorage.setItem(name, k);
     return k;
   } catch {
     CTX._key ||= `k${Date.now()}${Math.floor(Math.random() * 1e9)}`.padEnd(20, '0');

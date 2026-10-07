@@ -200,7 +200,12 @@ async function renderHotel(m) {
 
 async function paintTransit(box, reload = false) {
   try {
-    const { feeds, dir } = reload ? await api('/admin/transit/reload', { method: 'POST' }) : await api('/admin/transit');
+    const data = reload ? await api('/admin/transit/reload', { method: 'POST' }) : await api('/admin/transit');
+    const feeds = data.feeds;
+    const canReload = reload || data.canReload;
+    const how = canReload
+      ? `descarga el nuevo .zip en nap.transportes.gob.es, déjalo en la carpeta <code>data/gtfs</code> del servidor (sustituyendo el antiguo) y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button>`
+      : 'los horarios los actualiza el administrador general del servidor (superadmin).';
     const fmtD = (d) => (d && d.length === 8 ? `${d.slice(6)}/${d.slice(4, 6)}/${d.slice(0, 4)}` : '—');
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const soon = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10).replace(/-/g, '');
@@ -211,14 +216,14 @@ async function paintTransit(box, reload = false) {
             const st = f.validTo < today ? '<span class="badge rejected">Caducado</span>' : f.validTo < soon ? '<span class="badge pending">Renovar pronto</span>' : '<span class="badge confirmed">Al día</span>';
             return `<tr><td><b>${esc(f.agencies.join(', '))}</b><div class="muted small">${esc(f.file)}</div></td><td>${f.trips.toLocaleString('es-ES')}</td><td>${f.stops}</td><td>${esc(fmtD(f.validTo))}</td><td>${st}</td></tr>`;
           })
-          .join('')}</tbody></table><p class="muted small">Para actualizar: descarga el nuevo .zip en nap.transportes.gob.es, déjalo en <code>${esc(dir)}</code> (borra el antiguo) y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`
-      : `<p class="muted">No hay horarios cargados. Deja los .zip GTFS en <code>${esc(dir)}</code> y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button></p>`;
+          .join('')}</tbody></table><p class="muted small">Para actualizar: ${how}</p>`
+      : `<p class="muted">No hay horarios cargados. Para activarlos: ${how}</p>`;
     box.querySelector('[data-reload-transit]')?.addEventListener('click', () => {
       box.innerHTML = 'Recargando…';
       paintTransit(box, true);
     });
   } catch (err) {
-    box.textContent = err.message;
+    box.textContent = errorText(err);
   }
 }
 

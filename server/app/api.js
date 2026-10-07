@@ -118,7 +118,10 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
       // Superadmin can act on any hotel via ?hotel=<id>; others are bound to theirs.
       req.hotelId = user.role === 'superadmin' ? clean(req.query.hotel || req.headers['x-hotel'] || user.hotel_id || '', 40) : user.hotel_id;
       if (!req.hotelId) return res.status(400).json({ error: 'hotel required' });
-      if (!hotelById.get(req.hotelId)) return res.status(404).json({ error: 'hotel not found' });
+      const hotel = hotelById.get(req.hotelId);
+      if (!hotel) return res.status(404).json({ error: 'hotel not found' });
+      // A deactivated hotel locks out its own staff (the superadmin can still manage it).
+      if (!hotel.active && user.role !== 'superadmin') return res.status(403).json({ error: 'hotel inactive' });
       next();
     };
   }
@@ -154,7 +157,8 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     const room = db.prepare('SELECT * FROM rooms WHERE hotel_id = ? AND token = ? AND active = 1').get(h.id, req.params.token);
     if (!room) return res.status(404).json({ error: 'room not found' });
     const stay = db.prepare(`SELECT * FROM stays WHERE room_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`).get(room.id) || null;
-    res.json({ room: { id: room.id, number: room.number, floor: room.floor }, stay: stay && { id: stay.id, guestName: stay.guest_name, lang: stay.lang, checkout: stay.checkout } });
+    // The QR sticker outlives each stay: never reveal who is staying now, only the language to use.
+    res.json({ room: { id: room.id, number: room.number, floor: room.floor }, stay: stay && { lang: stay.lang } });
   });
 
   const guestBucket = (req) => `${clientIp(req)}|${clean(req.body?.guestKey, 64)}`;
@@ -171,7 +175,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     if (hasRooms && !db.prepare('SELECT 1 FROM rooms WHERE hotel_id = ? AND active = 1 AND number = ? COLLATE NOCASE').get(h.id, room)) return res.status(400).json({ error: 'unknown room' });
     let stayId = null;
     if (b.roomToken) {
-      const r = db.prepare('SELECT id FROM rooms WHERE hotel_id = ? AND token = ?').get(h.id, clean(b.roomToken, 40));
+      const r = db.prepare('SELECT id FROM rooms WHERE hotel_id = ? AND token = ? AND number = ? COLLATE NOCASE').get(h.id, clean(b.roomToken, 40), room);
       const s = r && db.prepare(`SELECT id FROM stays WHERE room_id = ? AND status = 'active' ORDER BY created_at DESC LIMIT 1`).get(r.id);
       stayId = s?.id || null;
     }
@@ -246,8 +250,10 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     const hotel = user.hotel_id ? hotelById.get(user.hotel_id) : null;
     res.json({ user: publicUser(user), hotel: hotel && hotelPublic(hotel) });
   });
-  app.get('/auth/options', (req, res) => res.json({ emailReset: notifier.canMail(), minPassword: MIN_PASSWORD }));
-  app.post('/auth/password', signedIn, (req, res) => {
+  const emailResetOn = () => notifier.canMail() && (!!publicUrl || !production);
+  app.get('/auth/options', (req, res) => res.json({ emailReset: emailResetOn(), minPassword: MIN_PASSWORD }));
+  const pwChange = createLimiter({ windowMs: 15 * 60_000, max: 10 });
+  app.post('/auth/password', signedIn, limit(pwChange, (req) => req.user.id, 'too many attempts'), (req, res) => {
     if (!verifyPassword(req.body?.current, req.user.password_hash)) return res.status(400).json({ error: 'wrong password' });
     const next = String(req.body?.next || '');
     const problem = passwordProblem(next);
@@ -262,11 +268,16 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
   app.post('/auth/forgot', limit(forgotLimiter, (req) => clientIp(req), 'too many attempts'), async (req, res) => {
     const email = clean(req.body?.email, 120).toLowerCase();
     const user = EMAIL_RE.test(email) ? db.prepare('SELECT * FROM users WHERE email = ? AND active = 1').get(email) : null;
-    if (user && notifier.canMail()) {
+    if (user && emailResetOn()) {
       const raw = randomBytes(32).toString('base64url');
       db.prepare('DELETE FROM password_resets WHERE user_id = ? OR expires_at < ?').run(user.id, Date.now());
       db.prepare('INSERT INTO password_resets (token_hash, user_id, expires_at) VALUES (?,?,?)').run(sha256(raw), user.id, Date.now() + 30 * 60_000);
-      const base = publicUrl || `${req.protocol}://${req.get('host')}`;
+      // Never build the link from the Host header in production (reset-token theft).
+      const base = publicUrl || (production ? '' : `${req.protocol}://${req.get('host')}`);
+      if (!base) {
+        console.warn('[concierge] password reset e-mail skipped: set PUBLIC_URL');
+        return res.json({ ok: true, emailReset: false });
+      }
       notifier.mail({
         to: user.email,
         subject: 'Restablecer tu contraseña · Concierge',
@@ -274,7 +285,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
       });
     }
     // Same answer whether or not the account exists.
-    res.json({ ok: true, emailReset: notifier.canMail() });
+    res.json({ ok: true, emailReset: emailResetOn() });
   });
   app.post('/auth/reset', limit(forgotLimiter, (req) => `r:${clientIp(req)}`, 'too many attempts'), (req, res) => {
     const raw = clean(req.body?.token, 100);
@@ -292,6 +303,8 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
 
   // ---------- staff (reception) ----------
   const staff = requireRole('superadmin', 'admin', 'reception', 'staff');
+  // Check-in/out, room QR tokens and guest blocking are front-desk tasks, not housekeeping.
+  const reception = requireRole('superadmin', 'admin', 'reception');
   app.get('/staff/requests', staff, (req, res) => {
     const status = clean(req.query.status, 10) || 'open';
     const q = clean(req.query.q, 60);
@@ -329,7 +342,7 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     if (b.comment) logEvent(r.id, req.user.id, 'comment', clean(b.comment));
     const updated = requestRow(requestWithAssignee(r.id));
     const h = hotelById.get(req.hotelId);
-    if (b.status && b.status !== r.status) notifier.send({ event: 'updated', hotel: hotelPublic(h), hotelRow: h, request: updated });
+    if (STATUSES.includes(b.status) && b.status !== r.status) notifier.send({ event: 'updated', hotel: hotelPublic(h), hotelRow: h, request: updated });
     res.json({ request: updated });
   });
   app.get('/staff/requests/:id/events', staff, (req, res) => {
@@ -337,13 +350,13 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     res.json({ events: rows.map((e) => ({ id: e.id, event: e.event, detail: e.detail, at: e.at, user: e.user_name || null })) });
   });
   app.get('/staff/users', staff, (req, res) => {
-    res.json({ users: db.prepare('SELECT id, name, email, role FROM users WHERE hotel_id = ? AND active = 1 ORDER BY name').all(req.hotelId) });
+    res.json({ users: db.prepare("SELECT id, name, email, role FROM users WHERE hotel_id = ? AND active = 1 AND role != 'superadmin' ORDER BY name").all(req.hotelId) });
   });
-  app.get('/staff/stays', staff, (req, res) => {
+  app.get('/staff/stays', reception, (req, res) => {
     const rows = db.prepare(`SELECT s.*, r.number AS room_number, r.token AS room_token FROM stays s LEFT JOIN rooms r ON r.id = s.room_id WHERE s.hotel_id = ? ORDER BY s.status = 'active' DESC, s.created_at DESC LIMIT 300`).all(req.hotelId);
     res.json({ stays: rows.map(stayRow) });
   });
-  app.post('/staff/stays', staff, (req, res) => {
+  app.post('/staff/stays', reception, (req, res) => {
     const b = req.body || {};
     const room = db.prepare('SELECT * FROM rooms WHERE hotel_id = ? AND (id = ? OR number = ?)').get(req.hotelId, clean(b.roomId, 12), clean(b.room, 12));
     if (!room) return res.status(400).json({ error: 'room not found' });
@@ -354,11 +367,15 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     );
     res.status(201).json({ stay: stayRow(db.prepare(`SELECT s.*, r.number AS room_number, r.token AS room_token FROM stays s LEFT JOIN rooms r ON r.id = s.room_id WHERE s.id = ?`).get(id)) });
   });
-  app.patch('/staff/stays/:id', staff, (req, res) => {
+  app.patch('/staff/stays/:id', reception, (req, res) => {
     const s = db.prepare('SELECT * FROM stays WHERE id = ? AND hotel_id = ?').get(req.params.id, req.hotelId);
     if (!s) return res.status(404).json({ error: 'not found' });
     const b = req.body || {};
-    if (['upcoming', 'active', 'closed'].includes(b.status)) db.prepare('UPDATE stays SET status = ? WHERE id = ?').run(b.status, s.id);
+    if (['upcoming', 'active', 'closed'].includes(b.status)) {
+      // One active stay per room.
+      if (b.status === 'active' && s.room_id) db.prepare(`UPDATE stays SET status = 'closed' WHERE room_id = ? AND status = 'active' AND id != ?`).run(s.room_id, s.id);
+      db.prepare('UPDATE stays SET status = ? WHERE id = ?').run(b.status, s.id);
+    }
     if (b.guestName !== undefined) db.prepare('UPDATE stays SET guest_name = ? WHERE id = ?').run(clean(b.guestName, 80), s.id);
     if (b.checkout !== undefined) db.prepare('UPDATE stays SET checkout = ? WHERE id = ?').run(clean(b.checkout, 20), s.id);
     res.json({ stay: stayRow(db.prepare(`SELECT s.*, r.number AS room_number, r.token AS room_token FROM stays s LEFT JOIN rooms r ON r.id = s.room_id WHERE s.id = ?`).get(s.id)) });
@@ -590,11 +607,11 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     res.json({ ok: true });
   });
 
-  chat.mount(app, { hotelBySlug, staff });
+  chat.mount(app, { hotelBySlug, staff, reception });
   weather.mount(app, { hotelBySlug });
   media.mount(app, { admin });
   stats.mount(app, { hotelBySlug, admin });
-  transit.mount(app, { hotelBySlug, admin });
+  transit.mount(app, { hotelBySlug, admin, superadmin: superadminOnly });
 
   app.use((err, req, res, next) => {
     if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'invalid JSON' });

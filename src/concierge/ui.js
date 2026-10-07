@@ -66,7 +66,8 @@ export function createUi({ root, globe, config, room = null }) {
     requestsTick: null,
     chat: { open: false, messages: [], lastId: 0, unread: 0, requestId: null, sending: false },
     weather: null,
-    guest: room ? { room: room.number, name: room.stay?.guestName || '' } : loadObj('concierge.guest'), // { room, name }
+    // From the room QR: room number only; the name is what this device typed before for that same room.
+    guest: room ? { room: room.number, name: loadObj('concierge.guest')?.room === room.number ? loadObj('concierge.guest').name || '' : '' } : loadObj('concierge.guest'), // { room, name }
   };
 
   root.innerHTML = `

@@ -8,7 +8,8 @@
  *   Staff:  GET  /api/staff/chats                   GET  /api/staff/chats/:key?after=
  *           POST /api/staff/chats/:key { body, requestId }
  */
-import { createLimiter } from './security.js';
+import { createLimiter, limit, clientIp } from './security.js';
+const LANGS = ['es', 'en', 'fr', 'de'];
 
 const KEY_RE = /^[A-Za-z0-9_-]{16,64}$/;
 const MAX_BODY = 1000;
@@ -32,7 +33,7 @@ export function createChat({ db }) {
     if (!validKey(key)) return null;
     const existing = db.prepare('SELECT hotel_id FROM conversations WHERE key = ?').get(key);
     if (existing && existing.hotel_id !== hotelId) return null; // keys never cross hotels
-    upsertConv.run(key, hotelId, String(room).slice(0, 12), String(name).slice(0, 80), stayId, lang);
+    upsertConv.run(key, hotelId, String(room ?? '').slice(0, 12), String(name ?? '').slice(0, 80), stayId, LANGS.includes(lang) ? lang : 'es');
     return getConv.get(key, hotelId);
   }
 
@@ -56,6 +57,9 @@ export function createChat({ db }) {
   }
 
   /** Mount routes. `hotelBySlug`, `staff` middleware and helpers come from the main API. */
+  // Device keys are chosen by the client, so flooding is also bounded per IP.
+  const perIp = createLimiter({ windowMs: 60_000, max: 30 });
+  const perIpDay = createLimiter({ windowMs: 24 * 3600_000, max: 300 });
   function mount(app, { hotelBySlug, staff }) {
     app.get('/h/:slug/chat', (req, res) => {
       const h = hotelBySlug.get(req.params.slug);
@@ -72,7 +76,7 @@ export function createChat({ db }) {
       res.json({ messages, unread });
     });
 
-    app.post('/h/:slug/chat', (req, res) => {
+    app.post('/h/:slug/chat', limit(perIp, clientIp, 'too many messages'), limit(perIpDay, clientIp, 'too many messages'), (req, res) => {
       const h = hotelBySlug.get(req.params.slug);
       if (!h) return res.status(404).json({ error: 'hotel not found' });
       const b = req.body || {};
@@ -80,7 +84,7 @@ export function createChat({ db }) {
       if (!allowed(b.key)) return res.status(429).json({ error: 'too many messages' });
       const conv = ensure({ key: b.key, hotelId: h.id, room: b.room, name: b.name, lang: b.lang });
       if (!conv) return res.status(400).json({ error: 'invalid key' });
-      const requestId = b.requestId ? db.prepare('SELECT id FROM requests WHERE id = ? AND guest_key = ?').get(String(b.requestId), b.key)?.id || null : null;
+      const requestId = b.requestId ? db.prepare('SELECT id FROM requests WHERE id = ? AND guest_key = ? AND hotel_id = ?').get(String(b.requestId), b.key, h.id)?.id || null : null;
       const id = post({ key: b.key, hotelId: h.id, author: 'guest', requestId, body: b.body });
       if (!id) return res.status(400).json({ error: 'empty message' });
       res.status(201).json({ messages: messagesFor(b.key, Number(id) - 1) });
@@ -106,7 +110,7 @@ export function createChat({ db }) {
       const conv = getConv.get(req.params.key, req.hotelId);
       if (!conv) return res.status(404).json({ error: 'not found' });
       if (conv.unread_staff) db.prepare('UPDATE conversations SET unread_staff = 0 WHERE key = ?').run(conv.key);
-      const requests = db.prepare('SELECT id, type, status, when_at, details FROM requests WHERE guest_key = ? ORDER BY created_at DESC LIMIT 20').all(conv.key);
+      const requests = db.prepare('SELECT id, type, status, when_at, details FROM requests WHERE guest_key = ? AND hotel_id = ? ORDER BY created_at DESC LIMIT 20').all(conv.key, req.hotelId);
       res.json({
         chat: { key: conv.key, room: conv.room, guestName: conv.guest_name, lang: conv.lang, blocked: !!conv.blocked },
         messages: messagesFor(conv.key, req.query.after),
@@ -125,8 +129,8 @@ export function createChat({ db }) {
     });
   }
 
-  function mountModeration(app, { staff }) {
-    app.post('/staff/chats/:key/block', staff, (req, res) => {
+  function mountModeration(app, { reception }) {
+    app.post('/staff/chats/:key/block', reception, (req, res) => {
       const conv = getConv.get(req.params.key, req.hotelId);
       if (!conv) return res.status(404).json({ error: 'not found' });
       const blocked = req.body?.blocked === false ? 0 : 1;

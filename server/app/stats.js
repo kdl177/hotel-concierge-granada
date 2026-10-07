@@ -6,26 +6,22 @@
  *   POST /api/h/:slug/events  { events: [{ kind, ref }], lang }
  *   GET  /api/admin/stats?days=30
  */
+import { createLimiter, clientIp } from './security.js';
+
 const KINDS = new Set(['open', 'view_poi', 'route', 'guide', 'search', 'action', 'service', 'chat_open']);
 
 export function createStats({ db }) {
   const ins = db.prepare('INSERT INTO events (hotel_id, kind, ref, lang) VALUES (?,?,?,?)');
-  const perIp = new Map();
+  const perIp = createLimiter({ windowMs: 60_000, max: 10 }); // batches per minute (50 events each)
 
   function mount(app, { hotelBySlug, admin }) {
     app.post('/h/:slug/events', (req, res) => {
       const h = hotelBySlug.get(req.params.slug);
       if (!h) return res.status(404).end();
-      const ip = req.ip || 'x';
-      const now = Date.now();
-      const slot = perIp.get(ip) || { t: now, n: 0 };
-      if (now - slot.t > 60_000) Object.assign(slot, { t: now, n: 0 });
+      if (!perIp.hit(clientIp(req)).ok) return res.status(429).end();
       const list = Array.isArray(req.body?.events) ? req.body.events.slice(0, 50) : [];
-      slot.n += list.length;
-      perIp.set(ip, slot);
-      if (slot.n > 300) return res.status(429).end();
       const lang = ['es', 'en', 'fr', 'de'].includes(req.body?.lang) ? req.body.lang : '';
-      for (const e of list) if (KINDS.has(e?.kind)) ins.run(h.id, e.kind, String(e.ref ?? '').slice(0, 60), lang);
+      for (const e of list) if (KINDS.has(e?.kind)) ins.run(h.id, e.kind, String(e.ref ?? '').replace(/[\u0000-\u001f<>]/g, '').trim().slice(0, 60), lang);
       res.status(204).end();
     });
 

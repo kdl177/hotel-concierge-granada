@@ -554,7 +554,7 @@ export function createTransit({ dataDir }) {
 
   // Route planning is CPU work: bound it per client.
   const limiter = createLimiter({ windowMs: 60_000, max: 30 });
-  function mount(app, { hotelBySlug, admin }) {
+  function mount(app, { hotelBySlug, admin, superadmin }) {
     app.post('/h/:slug/transit', limit(limiter, clientIp, 'too many route requests'), async (req, res) => {
       const h = hotelBySlug.get(req.params.slug);
       if (!h) return res.status(404).json({ error: 'hotel not found' });
@@ -575,9 +575,10 @@ export function createTransit({ dataDir }) {
     });
     app.get('/admin/transit', admin, async (req, res) => {
       const n = await load();
-      res.json({ dir, feeds: n.feeds });
+      res.json({ feeds: n.feeds, canReload: req.user.role === 'superadmin' });
     });
-    app.post('/admin/transit/reload', admin, async (req, res) => {
+    // Timetables are shared by every hotel on this server: only the superadmin reloads them.
+    app.post('/admin/transit/reload', superadmin, async (req, res) => {
       loading = null;
       const n = await load();
       res.json({ feeds: n.feeds });
