@@ -1,5 +1,5 @@
 # Replace with your domain. Caddy obtains and renews the HTTPS certificate automatically.
 concierge.example.com {
-	encode gzip
+	encode zstd gzip
 	reverse_proxy concierge:4180
 }

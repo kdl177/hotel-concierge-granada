@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import express from 'express';
+import compression from 'compression';
 import { loadEnv } from 'vite';
 import { createConciergeApp } from './index.js';
 import { localProviderPlugins } from '../providers/local.js';
@@ -24,6 +25,8 @@ process.env.NODE_ENV ||= 'production';
 const { app: concierge } = createConciergeApp();
 const app = express();
 app.disable('x-powered-by');
+// gzip/deflate for pages, JS and JSON (Cesium alone is ~5 MB uncompressed).
+app.use(compression({ threshold: 1024 }));
 app.set('trust proxy', process.env.TRUST_PROXY || 'loopback, uniquelocal');
 app.use(concierge);
 
