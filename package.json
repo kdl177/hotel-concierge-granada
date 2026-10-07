@@ -40,7 +40,7 @@
     "opensky:import": "./scripts/opensky-import-client.sh",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node scripts/run-unit-tests.mjs && node --test test/concierge/",
+    "test": "node scripts/run-unit-tests.mjs",
     "test:track": "node scripts/track-regression.mjs",
     "qa:map-source-tray": "node scripts/qa-map-source-tray.mjs",
     "check:boundaries": "node scripts/check-import-directions.mjs && node scripts/check-package-boundaries.mjs",
@@ -49,7 +49,8 @@
     "serve": "node server/app/main.js",
     "reset-password": "node scripts/reset-password.mjs",
     "test:concierge": "node --test test/concierge/",
-    "test:e2e:concierge": "node test/e2e/run.mjs"
+    "test:e2e:concierge": "node test/e2e/run.mjs",
+    "test:all": "npm test && npm run test:concierge"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
