@@ -8,15 +8,25 @@ App de orientación para huéspedes construida sobre God's Eye View: mapa 3D, qu
 | `/?h=<slug>` | Huésped (móvil vía QR o kiosko). Sin `h` usa el primer hotel. `&r=<token>` identifica la habitación. |
 | `/reception.html` | Recepción: bandeja de solicitudes en vivo, asignación, notas, historial, check-in/out. |
 | `/admin.html` | Administración del hotel: datos, servicios, acciones rápidas, lugares, habitaciones + QR, usuarios. Superadmin: hoteles. |
-| `/console.html` | Consola original de God's Eye View (opcional). |
+| `/console.html` | Consola original de God's Eye View: siempre en `npm run dev`; en producción solo con `CONCIERGE_CONSOLE=1`. |
 
 ## Arrancar en local
 ```
-npm ci
+npm install        # tras cada actualización (en PowerShell, dentro de la carpeta)
 npm run dev        # desarrollo (Vite + API integrada) → http://localhost:4180
 npm start          # producción: build + servidor Node
 ```
-Primer arranque: crea la base de datos `data/concierge.sqlite`, importa el hotel de ejemplo (Gran Hotel Luna de Granada) y el usuario **admin@hotel.local / admin1234** (superadmin). Cámbialo en Admin → Usuarios o define `ADMIN_EMAIL` / `ADMIN_PASSWORD` antes del primer arranque.
+Primer arranque: crea `data/concierge.sqlite` con el Gran Hotel Luna de Granada y el superadmin `admin@hotel.local`.
+- En desarrollo la contraseña inicial es `admin1234`; en producción (sin `ADMIN_PASSWORD`) se genera una aleatoria que aparece **una vez** en el log.
+- En ambos casos el primer acceso **obliga a cambiarla** (mínimo 10 caracteres, letras y números).
+- ¿Contraseña perdida? Con `SMTP_URL`: enlace "¿Has olvidado la contraseña?". Sin correo: otro admin la restablece en Admin → Usuarios, o desde el servidor `npm run reset-password -- correo@hotel.es`.
+
+## Pruebas
+```
+npm run test:concierge       # unitarias + integración de la API (node:test)
+npm run build && npm run test:e2e:concierge   # E2E en navegador real + accesibilidad (axe)
+npm run test:all             # suite del proyecto base + concierge
+```
 
 ## Variables (.env)
 ```
@@ -31,7 +41,14 @@ SMTP_FROM=concierge@tuhotel.com
 GOOGLE_MAPS_API_KEY=                        # 3D fotorrealista + búsqueda de lugares
 GOOGLE_MAPS_SERVER_API_KEY=                 # Routes API (transporte público con horarios)
 CESIUM_ION_TOKEN=                           # alternativa para el 3D
+TRUST_PROXY=loopback, uniquelocal           # proxies de confianza (Caddy/Docker); por defecto así
+CONCIERGE_CONSOLE=                          # 1 = publicar también la consola de God's Eye View en producción
+PROVIDER_RATE_PER_MIN=60                    # límite por IP de rutas/búsquedas de mapa
 ```
+`GOOGLE_MAPS_API_KEY` y `CESIUM_ION_TOKEN` viajan al navegador: restríngelas por dominio en sus consolas.
+
+## Seguridad (resumen)
+Roles superadmin / admin / recepción / personal; los admins de hotel no ven ni tocan al superadmin. Contraseñas scrypt, sesiones firmadas y revocables ("cerrar sesión en todos los dispositivos"), bloqueo tras 5 intentos, CSP y cabeceras de seguridad, protección CSRF por origen, límites a solicitudes de huéspedes, webhooks solo hacia Internet pública (https). Detalle en `AUDITORIA.md`.
 
 ## Despliegue (VPS con Docker)
 ```

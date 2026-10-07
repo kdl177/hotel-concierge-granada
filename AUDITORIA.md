@@ -37,3 +37,41 @@ Método: lectura del código, ejecución en desarrollo (Vite, puerto 4180) y en 
 Verificado sin problemas: escape de los datos del huésped hacia recepción (nombre, habitación, detalles, chat); subida de fotos (tipo + *magic bytes* + 3 MB, sin SVG); sesiones con HMAC y comparación en tiempo constante; contraseñas con scrypt; SQL siempre parametrizado (los nombres de tabla salen de una lista fija); claves de chat de 128 bits que no cruzan entre hoteles.
 
 Contraste (axe): sin violaciones en las pantallas auditadas.
+
+## 2ª auditoría (7 oct 2026), después de los cambios
+
+Se repitieron los mismos ataques con `curl` contra el build de producción, las pruebas automáticas y axe en todas las pantallas.
+
+| ID | Antes | Después (comprobado) |
+|---|---|---|
+| A-01 | Un admin de hotel tomaba el control del superadmin | ✅ Corregido. Para un admin de hotel, el superadmin no aparece y no se puede editar ni borrar (404). Prueba `A-01` |
+| A-02 | `admin1234` en producción | ✅ Corregido. En producción se genera una contraseña aleatoria y es obligatorio cambiarla. Las cuentas que aún usan `admin1234` quedan forzadas al cambio |
+| A-03 | ~35 endpoints de God's Eye View públicos | ✅ Corregido. `/console.html`, `/api/realtime/token`, `/api/setup/keys`, `/api/opensky` y `/api/cctv/*` responden 404 en producción. Los mapas tienen límite por IP. Nada se ha borrado (`CONCIERGE_CONSOLE=1` lo reactiva) |
+| A-04 | Fuerza bruta sin límite | ✅ Corregido. 5 fallos → 429 con `Retry-After` |
+| A-05 | Sin recuperación de contraseña ni revocación de sesiones | ✅ Corregido. Recuperación por email (token de un solo uso, 30 min), reseteo por un admin, CLI, "cerrar sesión en todos los dispositivos" y versión de sesión |
+| A-06/A-07 | XSS por iconos, teléfonos, `javascript:` | ✅ Corregido. Validado en el servidor y escapado en el cliente. Los iconos son códigos de una fuente propia y un nombre desconocido muestra `help` |
+| A-08 | Spam ilimitado de solicitudes | ✅ Corregido. 6/min y 60/día por dispositivo e IP. Solo se aceptan habitaciones reales si el hotel las tiene configuradas. Recepción puede bloquear un dispositivo abusivo |
+| A-09 | Solicitudes legibles por ID | ✅ Corregido. Solo las ve el dispositivo que las creó |
+| A-10 | 0 pruebas | ✅ 33 de integración/unitarias del concierge + E2E de 25 comprobaciones en navegador real. La suite original del proyecto pasa entera con `npm run test:all` |
+| A-11 | Sin CSP ni cabeceras | ✅ Corregido. CSP sin scripts inline ni eval, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, `X-Frame-Options`, COOP y HSTS bajo HTTPS |
+| A-12 | SSRF por webhook | ✅ Corregido. Solo https y nunca hacia redes internas, comprobando también la IP resuelta al guardar y al enviar |
+| A-13 | `trust proxy: true` | ✅ Corregido. `loopback, uniquelocal`, configurable con `TRUST_PROXY` |
+| A-14 | CSRF solo con SameSite | ✅ Corregido. Se bloquean `Origin` y `Sec-Fetch-Site` de otros sitios |
+| A-15 | Validación mínima, errores de SQLite visibles | ✅ Corregido. Validadores por campo y mensajes genéricos traducidos al español en el panel |
+| A-16/A-17 | El huésped no podía ver todos los lugares | ✅ Corregido. Catálogo con filtros (categoría, ideal ahora, bajo techo) y orden |
+| A-18 | 500 con `X-Hotel` inexistente | ✅ 404 |
+| A-19 | Fallos de axe | ✅ 0 violaciones serias o críticas WCAG 2 A/AA en 10 pantallas (E2E) |
+| A-20 | Diseño de plantilla | ✅ Sistema "Nazarí" compartido: paleta propia, Fraunces + Manrope, sellos con estrella nazarí, foco visible, `prefers-reduced-motion` |
+| A-21 | SEO/PWA | ✅ `description`, Open Graph, manifest, `robots.txt` y `noindex` en el back-office |
+| A-22 | Consola en el build | ✅ Solo con `CONCIERGE_CONSOLE=1` |
+| A-23 | Docker | ✅ Se mantiene el `Dockerfile` de tu equipo, con `HEALTHCHECK` |
+| A-24 | GTFS del Metro caduca | ⏳ Externo, ver PENDIENTES P-03 |
+
+### Nuevos hallazgos de esta 2ª pasada (ya corregidos)
+
+- Las etiquetas de las pestañas inferiores sobrescribían su propio icono (`span` equivocado). Era un fallo latente que salía en cuanto la fuente no cargaba.
+- La app dependía de Google Fonts: si fallaba la red, los iconos aparecían como texto (`chevron_right`). Ahora las fuentes van en el propio servidor: iconos en 24 KB frente a ~5 MB. Esto también evita enviar la IP de los huéspedes a Google (RGPD).
+- `npm test` del proyecto base tenía 42 pruebas rotas porque apuntaban a `index.html`, que ahora es la app del hotel. Ahora apuntan a `console.html`.
+- Las respuestas iban sin comprimir. Ahora usan gzip: el JS principal pasa de 78 KB a 27 KB.
+- `/api/auth/me` y el tiempo devolvían 401/503 "normales" que ensuciaban la consola. Ahora responden 200 con estado vacío.
+- En producción se creaban habitaciones de ejemplo (101–302): eran datos falsos. Ahora no se crean.
