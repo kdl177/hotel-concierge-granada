@@ -149,6 +149,9 @@ test('A-08: guest requests are rate limited and validated', async () => {
   const g2 = client(app.base);
   assert.equal((await g2.post('/api/h/default/requests', { room: '', guestKey: guestKey(10) })).status, 400);
   assert.equal((await g2.post('/api/h/default/requests', { room: '<script>', guestKey: guestKey(10) })).status, 400);
+  const unknown = await g2.post('/api/h/default/requests', { room: '999', guestKey: guestKey(10) });
+  assert.equal(unknown.status, 400, 'rooms are configured, 999 does not exist');
+  assert.equal(unknown.data.error, 'unknown room');
 });
 
 test('A-06/A-07/A-15: content is validated so nothing executes on guests', async () => {

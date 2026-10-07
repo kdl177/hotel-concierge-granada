@@ -166,6 +166,9 @@ export function createApi({ db, secret, secureCookies = false, publicUrl = '', d
     if (!room) return res.status(400).json({ error: 'room required' });
     if (!/^[\p{L}\p{N} ._-]{1,12}$/u.test(room)) return res.status(400).json({ error: 'invalid room' });
     const type = clean(b.type, 40).replace(/[^a-z0-9_-]/gi, '') || 'other';
+    // When the hotel has its rooms configured, only real room numbers are accepted.
+    const hasRooms = db.prepare('SELECT 1 FROM rooms WHERE hotel_id = ? AND active = 1 LIMIT 1').get(h.id);
+    if (hasRooms && !db.prepare('SELECT 1 FROM rooms WHERE hotel_id = ? AND active = 1 AND number = ? COLLATE NOCASE').get(h.id, room)) return res.status(400).json({ error: 'unknown room' });
     let stayId = null;
     if (b.roomToken) {
       const r = db.prepare('SELECT id FROM rooms WHERE hotel_id = ? AND token = ?').get(h.id, clean(b.roomToken, 40));
