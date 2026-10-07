@@ -75,3 +75,9 @@ test('session tokens are signed, expire and carry the session version', () => {
   const expired = createSessions({ secret: 'k', ttlMs: -1 }).issue({ id: 'u1' });
   assert.equal(s.read(expired), null);
 });
+
+test('SSRF: IPv4 hidden inside IPv6 literals is refused', async () => {
+  for (const ip of ['::ffff:7f00:1', '::7f00:1', '64:ff9b::7f00:1', '::ffff:a9fe:a9fe', '::ffff:127.0.0.1', 'ff02::1', 'fe80::1']) assert.equal(privateIp(ip), true, ip);
+  assert.equal(privateIp('64:ff9b::808:808'), false);
+  for (const u of ['https://[::ffff:7f00:1]/', 'https://[::ffff:a9fe:a9fe]/latest', 'https://[64:ff9b::7f00:1]/']) assert.equal((await checkWebhookUrl(u, { production: true })).ok, false, u);
+});

@@ -125,14 +125,35 @@ export function safeUrl(v, { allowPath = false, max = 400 } = {}) {
 }
 export const EMAIL_RE = /^[^\s@<>"']{1,64}@[^\s@<>"']{1,190}\.[a-z]{2,}$/i;
 
+/** Expands an IPv6 literal to 8 numbers (handles "::" and a trailing dotted IPv4). */
+function ipv6Words(ip) {
+  let v = ip.toLowerCase().split('%')[0];
+  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(v);
+  if (dotted) {
+    const [a, b, c, d] = dotted[1].split('.').map(Number);
+    v = v.slice(0, -dotted[1].length) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head, tail] = v.split('::');
+  const h = head ? head.split(':') : [];
+  const t = tail !== undefined && tail ? tail.split(':') : [];
+  const fill = v.includes('::') ? 8 - h.length - t.length : 0;
+  const words = [...h, ...Array(fill).fill('0'), ...t].map((x) => parseInt(x || '0', 16));
+  return words.length === 8 && words.every((x) => x >= 0 && x <= 0xffff) ? words : null;
+}
+
 function privateIp(ip) {
   if (net.isIPv4(ip)) {
     const [a, b] = ip.split('.').map(Number);
-    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || a >= 224;
+    return a === 10 || a === 127 || a === 0 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 100 && b >= 64 && b <= 127) || (a === 198 && (b === 18 || b === 19)) || a >= 224;
   }
-  const v = ip.toLowerCase();
-  if (v.startsWith('::ffff:')) return privateIp(v.slice(7));
-  return v === '::1' || v === '::' || v.startsWith('fc') || v.startsWith('fd') || v.startsWith('fe80');
+  const w = ipv6Words(ip);
+  if (!w) return true; // unparseable → refuse
+  const v4 = () => `${w[6] >> 8}.${w[6] & 255}.${w[7] >> 8}.${w[7] & 255}`;
+  const zero5 = w.slice(0, 5).every((x) => x === 0);
+  // IPv4-mapped (::ffff:a.b.c.d), IPv4-compatible (::a.b.c.d) and NAT64 (64:ff9b::/96) embed an IPv4 address.
+  if (zero5 && (w[5] === 0xffff || w[5] === 0)) return w[5] === 0 && w[6] === 0 && w[7] <= 1 ? true : privateIp(v4());
+  if (w[0] === 0x64 && w[1] === 0xff9b && w.slice(2, 6).every((x) => x === 0)) return privateIp(v4());
+  return (w[0] & 0xfe00) === 0xfc00 || (w[0] & 0xffc0) === 0xfe80 || (w[0] & 0xff00) === 0xff00;
 }
 
 /**
