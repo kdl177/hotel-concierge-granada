@@ -75,3 +75,35 @@ Se repitieron los mismos ataques con `curl` contra el build de producción, las 
 - Las respuestas iban sin comprimir. Ahora usan gzip: el JS principal pasa de 78 KB a 27 KB.
 - `/api/auth/me` y el tiempo devolvían 401/503 "normales" que ensuciaban la consola. Ahora responden 200 con estado vacío.
 - En producción se creaban habitaciones de ejemplo (101–302): eran datos falsos. Ahora no se crean.
+
+## 3ª auditoría (8 oct 2026)
+
+Repasé todo de nuevo con ojos frescos: servidor (ataques confirmados contra una base de datos temporal) y frontend (lectura del código más scripts de comprobación de i18n y contraste). Encontré 17 fallos en el servidor y unos 25 en la interfaz. Los importantes están corregidos y cubiertos por pruebas (`test/concierge/audit3.test.mjs` y el E2E).
+
+| Prioridad | Hallazgo | Estado |
+|---|---|---|
+| Alto | El enlace de recuperación de contraseña usaba la cabecera `Host`: un atacante podía recibir el token de otro usuario | ✅ En producción solo se usa `PUBLIC_URL`; sin él no se envía el email |
+| Alto | El filtro SSRF se saltaba con direcciones IPv6 que esconden una IPv4 (`[::ffff:7f00:1]`, NAT64…) | ✅ Corregido y probado |
+| Alto | El chat de recepción del hotel A mostraba solicitudes que el mismo huésped había hecho en el hotel B | ✅ Consultas acotadas al hotel y una clave de dispositivo por hotel (el chat ya funciona en varios hoteles) |
+| Alto | Chat sin límite por IP: bastaba rotar la clave del dispositivo para inundar recepción o saltarse un bloqueo | ✅ 30/min y 300/día por IP |
+| Alto (UX) | El formulario de solicitud del huésped se borraba cada 15 s mientras escribía | ✅ El texto y el foco se conservan (prueba E2E) |
+| Alto (UX) | Tras abrir el chat, los botones de solicitud (entradas, acciones rápidas) no hacían nada | ✅ Corregido |
+| Medio | El QR de la habitación mostraba el nombre y la salida del huésped actual a cualquiera con un QR antiguo | ✅ Ya no devuelve datos del huésped |
+| Medio | El rol "personal" (pisos) podía hacer check-in, ver los tokens QR y bloquear huéspedes | ✅ Esas acciones son solo para recepción |
+| Medio | Cualquier admin de hotel podía recargar los GTFS compartidos (bloquea el servidor) y veía rutas internas | ✅ Solo el superadmin, y sin rutas |
+| Medio | El `lang` del chat no se validaba (100.000 caracteres o un 500) | ✅ Lista blanca |
+| Medio | Mapa de estadísticas por IP sin limpieza (memoria creciente) | ✅ Limitador común con limpieza |
+| Medio | Un hotel desactivado seguía dejando entrar a su personal | ✅ 403 (el superadmin sí entra) |
+| Medio (UX) | Recepción: acciones que fallaban en silencio, refrescos solapados, el desplegable "Asignar a" se cerraba solo | ✅ Errores visibles, un refresco cada vez, repintado solo si hay cambios |
+| Medio (UX) | Cambiar rápido de pestaña en Admin podía abrir "Nuevo" en vez de "Editar" (posible duplicado) | ✅ Cargas secuenciadas |
+| Medio (UX) | Al marcar un lugar en el plan o cambiar de idioma, la cámara volvía a volar y la ruta se contaba dos veces | ✅ Re-render silencioso |
+| Medio | La búsqueda y la pantalla de carga tenían "Granada" fijo (rompía otros hoteles) | ✅ Ciudad y nombre salen del hotel |
+| Bajo | Subida de fotos: el cuerpo (5 MB) se procesaba antes de comprobar el login | ✅ Primero la autenticación |
+| Bajo | `/staff/users` listaba al superadmin; webhook "updated" con estados inválidos; varias estancias activas por habitación; enlace de huésped a estancia sin comprobar la habitación; cambio de contraseña sin límite | ✅ Corregidos |
+| Bajo (a11y) | El asa de la hoja no se podía usar con teclado; el foco se perdía al navegar; botones sin nombre; dianas táctiles < 44 px; modal sin trampa de foco; toasts sin región viva | ✅ Corregidos |
+| Bajo (rend.) | Seguía haciendo polling con la pestaña en segundo plano | ✅ Se pausa y se pone al día al volver |
+| Bajo | Colores de líneas GTFS/Google insertados en CSS sin validar | ✅ Solo `#hex` |
+
+**No corregido** (con motivo en PENDIENTES): *DNS rebinding* entre la comprobación del webhook y el envío, cualquiera puede bloquear 15 min una cuenta conocida, el logout normal no revoca una cookie copiada (está "cerrar sesión en todos los dispositivos") y los datos del huésped en un kiosko compartido.
+
+**Pruebas tras la 3ª auditoría:** 42/42 unitarias y de integración, y 26/26 en el E2E. 0 errores de consola y 0 fallos serios de accesibilidad.
