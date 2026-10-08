@@ -4,13 +4,15 @@
  * one series, the title names it), emphasis for the peak hour, hover tooltips
  * and a table view under every chart.
  */
-import { api, esc, TYPE_LABEL } from './common.js';
+import { api, esc, icon, errorText, TYPE_LABEL } from './common.js';
 
 const MODE_LABEL = { walk: 'A pie', transit: 'Transporte público', bike: 'Bicicleta' };
 const LANG_LABEL = { es: 'Español', en: 'Inglés', fr: 'Francés', de: 'Alemán' };
 let tip;
+let seq = 0;
 
 export async function renderStats(m, { hotel }) {
+  const mine = ++seq;
   const days = Number(localStorage.getItem('bo.statsDays')) || 30;
   m.innerHTML = `<div class="toolbar"><h2>Estadísticas</h2>
     <div class="filters" role="group" aria-label="Periodo">${[7, 30, 90, 365]
@@ -22,11 +24,21 @@ export async function renderStats(m, { hotel }) {
       renderStats(m, { hotel });
     }),
   );
-  const [data, config, pois] = await Promise.all([
-    api(`/admin/stats?days=${days}`),
-    api(`/h/${encodeURIComponent(hotel?.slug || 'default')}/config`).catch(() => ({ actions: [] })),
-    api('/admin/pois').catch(() => ({ items: [] })),
-  ]);
+  let data, config, pois;
+  try {
+    [data, config, pois] = await Promise.all([
+      api(`/admin/stats?days=${days}`),
+      api(`/h/${encodeURIComponent(hotel?.slug || 'default')}/config`).catch(() => ({ actions: [] })),
+      api('/admin/pois').catch(() => ({ items: [] })),
+    ]);
+  } catch (err) {
+    if (mine !== seq) return;
+    const box = m.querySelector('[data-stats]');
+    box.innerHTML = `<div class="state-error" role="alert">${icon('cloud_off')}<div><b>No se pudieron cargar las estadísticas</b><p class="muted">${esc(errorText(err))}</p></div><button class="btn" data-retry>${icon('refresh')} Reintentar</button></div>`;
+    box.querySelector('[data-retry]').addEventListener('click', () => renderStats(m, { hotel }));
+    return;
+  }
+  if (mine !== seq) return; // a newer period was chosen meanwhile
   const typeName = (k) => config.actions.find((a) => a.key === k)?.name?.es || TYPE_LABEL[k] || k;
   const poiName = (k) => pois.items.find((p) => p.key === k)?.name?.es || k;
   const k = data.kpis;

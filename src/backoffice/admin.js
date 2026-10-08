@@ -46,7 +46,7 @@ function shell() {
       <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Administración</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
-      <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
+      <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
     </header>
     <main id="main"></main>`;
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
@@ -124,7 +124,7 @@ document.addEventListener('change', async (e) => {
     img.hidden = false;
     msg.textContent = 'Subida ✔';
   } catch (err) {
-    msg.textContent = err.message;
+    msg.textContent = errorText(err);
   }
   input.value = '';
 });
@@ -144,14 +144,18 @@ document.addEventListener('click', (e) => {
 });
 
 // ---------- tabs ----------
+let loadSeq = 0;
 async function load() {
+  const seq = ++loadSeq;
   const m = main();
   m.innerHTML = '<div class="boot" aria-busy="true"><span class="spinner" aria-hidden="true"></span><span>Cargando…</span></div>';
   try {
     if (state.tab === 'hotel') return await renderHotel(m);
     if (state.tab === 'stats') return await renderStats(m, { hotel: state.hotel });
     if (state.tab === 'hotels') return await renderHotels(m);
-    const { items } = await api(`/admin/${state.tab}`);
+    const tab = state.tab;
+    const { items } = await api(`/admin/${tab}`);
+    if (seq !== loadSeq || tab !== state.tab) return; // a newer tab was opened meanwhile
     state.items = items;
     if (state.tab === 'services') return renderServices(m);
     if (state.tab === 'actions') return renderActions(m);
@@ -181,7 +185,7 @@ async function renderHotel(m) {
     <h3>Notificaciones</h3>
     <div class="row"><label>Webhook (n8n, Make, Slack…) al crear/actualizar solicitudes<input name="webhookUrl" value="${esc(hotel.webhookUrl || '')}" placeholder="https://…" /></label><label>Email de aviso (requiere SMTP_URL en el servidor)<input name="notifyEmail" value="${esc(hotel.notifyEmail || '')}" /></label></div>
     <h3>Transporte público (horarios oficiales GTFS)</h3><div data-transit class="muted">Comprobando…</div>
-    <div class="foot"><button class="btn primary">Guardar</button> <span class="muted">Slug de la app: <code>${esc(hotel.slug)}</code> → <a target="_blank" href="/?h=${esc(hotel.slug)}">/?h=${esc(hotel.slug)}</a></span></div>
+    <div class="foot"><button class="btn primary">Guardar</button> <span class="muted">Slug de la app: <code>${esc(hotel.slug)}</code> → <a target="_blank" rel="noopener" href="/?h=${esc(hotel.slug)}">/?h=${esc(hotel.slug)}</a></span></div>
   </form>`;
   paintTransit(m.querySelector('[data-transit]'));
   m.querySelector('form').addEventListener('submit', async (e) => {
@@ -193,7 +197,7 @@ async function renderHotel(m) {
       await api('/admin/hotel', { method: 'PUT', body: { ...v, lat: num(v.lat), lon: num(v.lon), welcomeView: { height: num(v.view?.height, 900), heading: num(v.view?.heading, 35), pitch: num(v.view?.pitch, -38) } } });
       toast('Guardado');
     } catch (err) {
-      toast(err.message, 'err');
+      toast(errorText(err), 'err');
     }
   });
 }
@@ -356,7 +360,7 @@ function renderRooms(m) {
     title: 'Habitaciones y códigos QR',
     help: 'Imprime el QR de cada habitación: al escanearlo la app ya sabe la habitación y el huésped (si hay check-in).',
     columns: ['Habitación', 'Planta', 'Enlace', 'Activa'],
-    rows: state.items.map((r) => `<tr><td><b>${esc(r.number)}</b></td><td>${esc(r.floor)}</td><td><a target="_blank" href="${esc(r.url)}">${esc(r.url)}</a></td><td>${r.active ? '✔' : '—'}</td>${rowBtns(r.id, `<a class="btn sm" target="_blank" href="/api/admin/rooms/${r.id}/qr.svg">${icon('qr_code')} QR</a>`)}</tr>`),
+    rows: state.items.map((r) => `<tr><td><b>${esc(r.number)}</b></td><td>${esc(r.floor)}</td><td><a target="_blank" rel="noopener" href="${esc(r.url)}">${esc(r.url)}</a></td><td>${r.active ? '✔' : '—'}</td>${rowBtns(r.id, `<a class="btn sm" target="_blank" rel="noopener" href="/api/admin/rooms/${r.id}/qr.svg">${icon('qr_code')} QR</a>`)}</tr>`),
     onNew: () => editRoom(null),
   });
   bindRows(m, { onEdit: editRoom, onDelete: (id) => api(`/admin/rooms/${id}`, { method: 'DELETE' }) });
@@ -367,7 +371,19 @@ function renderRooms(m) {
   bulk.querySelector('[data-bulk]').addEventListener('click', async () => {
     const v = await modal({ title: 'Crear habitaciones', body: `<div class="row"><label>Desde<input name="from" type="number" value="101" /></label><label>Hasta<input name="to" type="number" value="120" /></label></div><p class="muted">La planta se toma del primer dígito.</p>` });
     if (!v) return;
-    for (let n = num(v.from); n <= num(v.to) && n - num(v.from) < 400; n++) await api('/admin/rooms', { method: 'POST', body: { number: String(n), floor: String(n)[0] } }).catch(() => {});
+    let created = 0;
+    let existing = 0;
+    let failed = 0;
+    for (let n = num(v.from); n <= num(v.to) && n - num(v.from) < 400; n++) {
+      try {
+        await api('/admin/rooms', { method: 'POST', body: { number: String(n), floor: String(n)[0] } });
+        created++;
+      } catch (err) {
+        if (err.message === 'already exists') existing++;
+        else failed++;
+      }
+    }
+    toast(`${created} creadas${existing ? ` · ${existing} ya existían` : ''}${failed ? ` · ${failed} con error` : ''}`, failed ? 'err' : 'ok');
     load();
   });
   bulk.querySelector('[data-print]').addEventListener('click', (e) => {
@@ -417,7 +433,7 @@ async function renderHotels(m) {
   state.hotels = hotels;
   m.innerHTML = `<div class="toolbar"><h2>Hoteles</h2><button class="btn primary" data-new>${icon('add')} Nuevo hotel</button></div>
     <table class="table"><thead><tr><th>Nombre</th><th>Slug</th><th>Ciudad</th><th>Pendientes</th><th>Activo</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>
-    ${hotels.map((h) => `<tr><td><b>${esc(h.name)}</b></td><td><code>${esc(h.slug)}</code></td><td>${esc(h.city)}</td><td>${h.pending}</td><td>${h.active ? '✔' : '—'}</td><td class="right"><a class="btn sm" target="_blank" href="/?h=${esc(h.slug)}">${icon('open_in_new')} App</a><button class="btn sm" data-toggle="${h.id}" data-active="${h.active ? 1 : 0}">${h.active ? 'Desactivar' : 'Activar'}</button></td></tr>`).join('')}</tbody></table>`;
+    ${hotels.map((h) => `<tr><td><b>${esc(h.name)}</b></td><td><code>${esc(h.slug)}</code></td><td>${esc(h.city)}</td><td>${h.pending}</td><td>${h.active ? '✔' : '—'}</td><td class="right"><a class="btn sm" target="_blank" rel="noopener" href="/?h=${esc(h.slug)}">${icon('open_in_new')} App</a><button class="btn sm" data-toggle="${h.id}" data-active="${h.active ? 1 : 0}">${h.active ? 'Desactivar' : 'Activar'}</button></td></tr>`).join('')}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', async () => {
     const v = await modal({ title: 'Nuevo hotel', body: `<div class="row"><label>Nombre<input name="name" required /></label><label>Slug (URL)<input name="slug" required placeholder="hotel-sol-malaga" /></label></div>
       <div class="row"><label>Ciudad<input name="city" /></label><label>Teléfono<input name="phone" /></label></div><label>Dirección<input name="address" /></label>
@@ -429,7 +445,7 @@ async function renderHotels(m) {
       toast('Hotel creado');
       location.reload();
     } catch (err) {
-      toast(err.message, 'err');
+      toast(errorText(err), 'err');
     }
   });
   m.querySelectorAll('[data-toggle]').forEach((b) =>

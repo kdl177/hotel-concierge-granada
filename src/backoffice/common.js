@@ -277,13 +277,31 @@ export function modal({ title, body, submit = 'Guardar', wide = false, onOpen })
     document.body.appendChild(wrap);
     const form = wrap.querySelector('form');
     const opener = document.activeElement;
+    const app = document.getElementById('app');
+    app?.setAttribute('inert', ''); // the page behind the dialog can't be reached
     const close = (v) => {
       wrap.remove();
+      app?.removeAttribute('inert');
       document.removeEventListener('keydown', onKey);
       opener?.focus?.();
       resolve(v);
     };
-    const onKey = (e) => e.key === 'Escape' && close(null);
+    const onKey = (e) => {
+      if (e.key === 'Escape') return close(null);
+      if (e.key !== 'Tab') return;
+      // Keep Tab inside the dialog.
+      const items = [...form.querySelectorAll('button, input, select, textarea, a[href]')].filter((x) => !x.disabled && x.offsetParent !== null);
+      if (!items.length) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
     document.addEventListener('keydown', onKey);
     wrap.addEventListener('click', (e) => {
       if (e.target === wrap || e.target.closest('[data-close]')) close(null);
@@ -299,7 +317,7 @@ export function modal({ title, body, submit = 'Guardar', wide = false, onOpen })
       close(out);
     });
     onOpen?.(form, close);
-    form.querySelector('input, textarea, select')?.focus();
+    (form.querySelector('input, textarea, select') || form.querySelector('button[type=submit]'))?.focus();
   });
 }
 

@@ -146,7 +146,7 @@ function eventLabel(e) {
   return e.event;
 }
 
-document.addEventListener('click', async (e) => {
+document.addEventListener('click', safe(async (e) => {
   const toChat = e.target.closest('[data-chat]');
   if (toChat) {
     state.tab = 'chats';
@@ -178,16 +178,36 @@ document.addEventListener('click', async (e) => {
     }
     renderCards();
   }
-});
-document.addEventListener('change', async (e) => {
+}));
+document.addEventListener('change', safe(async (e) => {
   const sel = e.target.closest('[data-assign]');
   if (!sel) return;
   const id = sel.closest('[data-id]').dataset.id;
   await api(`/staff/requests/${id}`, { method: 'PATCH', body: { assignedTo: sel.value || null } });
   refresh();
-});
+}));
 
-async function refresh() {
+/** Every action reports its failure instead of failing silently. */
+function safe(fn) {
+  return (e) =>
+    Promise.resolve(fn(e)).catch((err) => {
+      if (err?.status === 401) return location.reload();
+      toast(errorText(err), 'err');
+    });
+}
+
+let refreshing = null;
+let refreshSeq = 0;
+let lastCardsSig = '';
+/** One refresh at a time; a stale answer (old filter/tab) never overwrites a newer view. */
+function refresh() {
+  if (refreshing) return refreshing;
+  refreshing = refreshNow().finally(() => (refreshing = null));
+  return refreshing;
+}
+async function refreshNow() {
+  const seq = ++refreshSeq;
+  const view = `${state.tab}|${state.filter}|${state.q}`;
   await refreshChatList();
   if (state.tab === 'stays') return refreshStays();
   if (state.tab === 'chats') return refreshChat();
@@ -196,6 +216,7 @@ async function refresh() {
       api(`/staff/requests?status=${state.filter}&q=${encodeURIComponent(state.q)}`),
       state.users.length ? Promise.resolve({ users: state.users }) : api('/staff/users'),
     ]);
+    if (seq !== refreshSeq || view !== `${state.tab}|${state.filter}|${state.q}`) return;
     state.users = users;
     const pendingIds = new Set(requests.filter((r) => r.status === 'pending').map((r) => r.id));
     if (state.known) {
@@ -210,8 +231,14 @@ async function refresh() {
     state.requests = requests;
     state.counts = counts;
     document.title = counts.pending ? `(${counts.pending}) Recepción` : 'Recepción';
-    for (const id of state.expanded) state.events.set(id, (await api(`/staff/requests/${id}/events`)).events);
-    renderCards();
+    await Promise.all([...state.expanded].map(async (id) => state.events.set(id, (await api(`/staff/requests/${id}/events`)).events)));
+    // Only repaint when something changed, and never under an open "Asignar a" menu.
+    const sig = JSON.stringify([requests, [...state.expanded], [...state.events]]);
+    const choosing = document.activeElement?.matches?.('.cards select');
+    if (sig !== lastCardsSig && !choosing) {
+      lastCardsSig = sig;
+      renderCards();
+    }
     document.querySelector('[data-live]')?.classList.remove('off');
   } catch (err) {
     document.querySelector('[data-live]')?.classList.add('off');
@@ -237,7 +264,7 @@ function renderStays(main) {
       toast('Check-in registrado');
       refreshStays();
     } catch (err) {
-      toast(err.message, 'err');
+      toast(errorText(err), 'err');
     }
   });
   refreshStays();
@@ -253,7 +280,7 @@ async function refreshStays() {
           (s) => `<tr class="${s.status}"><td><b>${esc(s.room || '—')}</b></td><td>${esc(s.guestName)}</td><td>${Number(s.guests) || 1}</td><td>${esc(s.lang.toUpperCase())}</td><td>${esc(s.checkin || '')}</td><td>${esc(s.checkout || '')}</td>
             <td><span class="badge ${s.status === 'active' ? 'confirmed' : 'done'}">${s.status === 'active' ? 'Activa' : s.status === 'closed' ? 'Cerrada' : 'Próxima'}</span></td>
             <td class="right">${s.status === 'active' ? `<button class="btn sm" data-checkout="${s.id}">${icon('logout')} Check-out</button>` : ''}
-              ${s.roomToken ? `<a class="btn sm" target="_blank" href="/?h=${encodeURIComponent(state.hotel.slug)}&r=${encodeURIComponent(s.roomToken)}">${icon('qr_code')} App</a>` : ''}</td></tr>`,
+              ${s.roomToken ? `<a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel.slug)}&r=${encodeURIComponent(s.roomToken)}">${icon('qr_code')} App</a>` : ''}</td></tr>`,
         )
         .join('')
     : '<tr><td colspan="8" class="muted">Sin estancias.</td></tr>';
@@ -357,7 +384,7 @@ async function refreshChat() {
     if (err.status === 404) state.chatKey = null;
   }
 }
-document.addEventListener('click', async (e) => {
+document.addEventListener('click', safe(async (e) => {
   const blk = e.target.closest('[data-block]');
   if (!blk || !state.chatKey) return;
   const block = blk.dataset.block === '1';
@@ -372,7 +399,7 @@ document.addEventListener('click', async (e) => {
   } catch (err) {
     toast(errorText(err), 'err');
   }
-});
+}));
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-open-chat]');
   if (!b) return;
