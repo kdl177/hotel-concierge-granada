@@ -1,3 +1,19 @@
+# OJO DE DIOS · Concierge para hoteles
+
+Concierge digital para huéspedes del **Gran Hotel Luna de Granada**: qué hacer ahora, cómo llegar (a pie, en bici o en bus y metro con horarios oficiales), servicios del hotel, solicitudes y chat con recepción. Incluye panel de recepción y de administración, y soporta varios hoteles.
+
+- **Empieza aquí:** [`ENTREGA.md`](ENTREGA.md) (qué hay, pruebas, cómo ejecutarlo) y [`CONCIERGE.md`](CONCIERGE.md) (guía técnica).
+- Auditoría, decisiones y pendientes: [`AUDITORIA.md`](AUDITORIA.md), [`DECISIONES.md`](DECISIONES.md), [`PENDIENTES.md`](PENDIENTES.md).
+
+```bash
+npm install
+npm run dev     # http://localhost:4180 · recepción /reception.html · admin /admin.html
+```
+
+Construido sobre [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view) (licencia MIT, se conserva). Debajo sigue el README original del proyecto base.
+
+---
+
 <div align="center">
 
 # 🌐 God's Eye View
