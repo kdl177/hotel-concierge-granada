@@ -18,6 +18,7 @@ async function start() {
   const HOTEL = config.hotel;
   HOTEL.welcomeView = { height: 900, heading: 35, pitch: -38, ...(HOTEL.welcomeView || {}) };
   document.title = `${HOTEL.name} · Concierge`;
+  loader.querySelector('.title').textContent = HOTEL.name;
   let room = null;
   const roomToken = params.get('r') || '';
   if (roomToken) {
@@ -42,6 +43,12 @@ async function start() {
 
 start().catch((error) => {
   console.error('Concierge failed to start:', error);
-  status.textContent = `Error: ${error?.message || error}`;
-  status.style.color = '#ff6b6b';
+  status.textContent = t('startError');
+  status.style.color = '#f07a63';
+  const retry = document.createElement('button');
+  retry.className = 'cg-btn';
+  retry.style.width = 'auto';
+  retry.textContent = t('retry');
+  retry.addEventListener('click', () => location.reload());
+  status.after(retry);
 });

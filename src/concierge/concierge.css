@@ -362,3 +362,11 @@ h3::before, .cg-sec::before { content: ''; display: inline-block; width: 7px; he
 .cg-langs button:hover:not(.on) { color: var(--cal); }
 .cg-logo { background: var(--oro); box-shadow: 0 0 0 3px var(--oro-soft); }
 .cg-sheet { box-shadow: var(--shadow-2); }
+/* Touch targets ≥ 44px (WCAG 2.5.5) without changing the visual size much */
+.cg-back, .cg-plan-btn { width: 44px; height: 44px; }
+.cg-x { width: 44px; height: 44px; margin: -7px; }
+.cg-mini { position: relative; width: 36px; height: 36px; }
+.cg-mini::after, .cg-langs button::after, .cg-seg button::after { content: ''; position: absolute; inset: -6px; }
+.cg-langs button, .cg-seg button { position: relative; }
+.cg-grip { display: block; width: 100%; border: 0; background: transparent; padding: 10px 0 8px; color: inherit; }
+.cg-grip:focus-visible { box-shadow: inset var(--focus); }

@@ -76,23 +76,23 @@ export function createUi({ root, globe, config, room = null }) {
         <span class="cg-logo">${icon('hotel')}</span>
         <div><div class="cg-hotel">${esc(HOTEL.name)}</div><div class="cg-city">${esc(HOTEL.city || '')}${room ? ` · ${esc(t('room'))} ${esc(room.number)}` : ''}</div></div>
       </div>
-      <div class="cg-langs" role="group" aria-label="Language">
-        ${LANGS_ON.map((l) => `<button data-lang="${l}" class="${l === getLang() ? 'on' : ''}">${LANG_LABELS[l]}</button>`).join('')}
+      <div class="cg-langs" role="group" aria-label="Idioma · Language">
+        ${LANGS_ON.map((l) => `<button data-lang="${l}" class="${l === getLang() ? 'on' : ''}" aria-pressed="${l === getLang()}" lang="${l}">${LANG_LABELS[l]}</button>`).join('')}
       </div>
     </header>
     <div class="cg-map-actions">
       <button class="cg-fab" data-action="home-view" title="${esc(HOTEL.name)}">${icon('hotel')}</button>
     </div>
     <section class="cg-sheet" data-sheet="half">
-      <div class="cg-grip"><span class="cg-handle"></span></div>
+      <button type="button" class="cg-grip" data-action="sheet-cycle" aria-label="${esc(t('explore'))}: ↕" aria-expanded="false"><span class="cg-handle"></span></button>
       <div class="cg-panel"></div>
     </section>
     <aside class="cg-side">
       <div class="cg-side-panel"></div>
     </aside>
     <nav class="cg-tabs">
-      <button data-tab="explore" class="on">${icon('explore')}<span>${esc(t('explore'))}</span></button>
-      <button data-tab="tasks">${icon('checklist')}<span>${esc(t('tasks'))}</span></button>
+      <button data-tab="explore" class="on" aria-pressed="true">${icon('explore')}<span>${esc(t('explore'))}</span></button>
+      <button data-tab="tasks" aria-pressed="false">${icon('checklist')}<span>${esc(t('tasks'))}</span></button>
     </nav>
     <div class="cg-guide" hidden></div>
   `;
@@ -119,11 +119,21 @@ export function createUi({ root, globe, config, room = null }) {
   function go(view, { push = true } = {}) {
     if (push) state.stack.push(state.view);
     state.view = view;
+    state.abort?.abort();
     stopGuide();
     render();
+    focusHeading();
+  }
+  /** After navigating, move keyboard/screen-reader focus to the new view's title. */
+  function focusHeading() {
+    const h = panel.querySelector('h1, h2');
+    if (!h || !panel.contains(document.activeElement) && document.activeElement !== document.body) return;
+    h.tabIndex = -1;
+    h.focus({ preventScroll: true });
   }
   function back() {
     state.view = state.stack.pop() || { name: 'home' };
+    state.abort?.abort();
     stopGuide();
     if (state.view.name === 'home') {
       globe.clearRoute();
@@ -132,16 +142,21 @@ export function createUi({ root, globe, config, room = null }) {
       globe.removeMarkers('stop');
     }
     render();
+    focusHeading();
   }
   function setSheet(mode) {
     state.sheet = mode;
     sheet.dataset.sheet = mode;
     sheet.style.transform = '';
+    sheet.querySelector('.cg-grip')?.setAttribute('aria-expanded', String(mode === 'full'));
   }
   function setTab(tab) {
     state.tab = tab;
     root.dataset.panel = tab;
-    tabs.querySelectorAll('[data-tab]').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
+    tabs.querySelectorAll('[data-tab]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.tab === tab);
+      b.setAttribute('aria-pressed', String(b.dataset.tab === tab));
+    });
     if (tab === 'tasks') renderTasks();
   }
 
@@ -304,7 +319,7 @@ export function createUi({ root, globe, config, room = null }) {
       </div>
       <div class="cg-filters" role="group" aria-label="${esc(t('filters'))}">
         ${toggle('now', t('filterNow'), 'schedule')}${toggle('indoor', t('filterIndoor'), 'roofing')}
-        <span class="cg-seg" role="group" aria-label="Orden">
+        <span class="cg-seg" role="group" aria-label="${esc(t('sortReco'))} / ${esc(t('sortDist'))}">
           <button class="${v.sort !== 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="reco" aria-pressed="${v.sort !== 'dist'}">${esc(t('sortReco'))}</button><button class="${v.sort === 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="dist" aria-pressed="${v.sort === 'dist'}">${esc(t('sortDist'))}</button>
         </span>
       </div>
@@ -433,7 +448,24 @@ export function createUi({ root, globe, config, room = null }) {
   }
 
   // ---------- tasks panel ----------
+  /** Re-rendering the side panel (polling, language…) must never wipe what the guest is typing. */
   function renderTasks() {
+    const snap = [...sidePanel.querySelectorAll('form input[name], form textarea[name], form select[name]')].map((el) => [el.closest('form')?.dataset.role, el.name, el.value]);
+    const active = document.activeElement && sidePanel.contains(document.activeElement) ? [document.activeElement.closest('form')?.dataset.role, document.activeElement.name, document.activeElement.selectionStart] : null;
+    renderTasksNow();
+    for (const [role, name, value] of snap) {
+      const el = sidePanel.querySelector(`form[data-role="${role}"] [name="${CSS.escape(name)}"]`);
+      if (el && value !== '' && el.value !== value) el.value = value;
+    }
+    if (active?.[1]) {
+      const el = sidePanel.querySelector(`form[data-role="${active[0]}"] [name="${CSS.escape(active[1])}"]`);
+      if (el) {
+        el.focus({ preventScroll: true });
+        if (Number.isInteger(active[2])) try { el.setSelectionRange(active[2], active[2]); } catch {}
+      }
+    }
+  }
+  function renderTasksNow() {
     if (state.chat.open) return renderChat();
     const planPois = POIS.filter((p) => state.plan.has(p.id));
     const suggestions = POIS.filter((p) => !state.plan.has(p.id)).sort((a, b) => b.priority - a.priority).slice(0, 3);
@@ -495,21 +527,21 @@ export function createUi({ root, globe, config, room = null }) {
     const g = state.guest || {};
     return `<form class="cg-form" data-role="request-form">
       <div class="cg-form-head">${icon(action?.icon || 'support_agent')}<b>${esc(f.title)}</b>
-        <button type="button" class="cg-x" data-action="request-cancel">${icon('close')}</button></div>
+        <button type="button" class="cg-x" data-action="request-cancel" aria-label="${esc(t('cancel'))}">${icon('close')}</button></div>
       ${f.preset ? `<div class="cg-form-preset">${esc(f.preset)}</div>` : ''}
       <div class="cg-form-row">
-        <label>${icon('door_front')}<input name="room" inputmode="numeric" required placeholder="${esc(t('room'))}" value="${esc(g.room || '')}" /></label>
-        <label>${icon('person')}<input name="name" placeholder="${esc(t('yourName'))} (${esc(t('optional'))})" value="${esc(g.name || '')}" /></label>
+        <label>${icon('door_front')}<input name="room" inputmode="numeric" required aria-label="${esc(t('room'))}" placeholder="${esc(t('room'))}" value="${esc(g.room || '')}" /></label>
+        <label>${icon('person')}<input name="name" aria-label="${esc(t('yourName'))}" placeholder="${esc(t('yourName'))} (${esc(t('optional'))})" value="${esc(g.name || '')}" /></label>
       </div>
       ${fields
         .map((k) =>
           k === 'details'
-            ? `<label class="cg-form-full">${icon('notes')}<textarea name="details" rows="2" placeholder="${esc(t('details'))} (${esc(t('optional'))})"></textarea></label>`
+            ? `<label class="cg-form-full">${icon('notes')}<textarea name="details" rows="2" aria-label="${esc(t('details'))}" placeholder="${esc(t('details'))} (${esc(t('optional'))})"></textarea></label>`
             : k === 'when'
-              ? `<label>${icon('schedule')}<input name="when" type="datetime-local" /></label>`
+              ? `<label>${icon('schedule')}<input name="when" type="datetime-local" aria-label="${esc(t('when'))}" /></label>`
               : k === 'people'
-                ? `<label>${icon('group')}<input name="people" type="number" min="1" max="20" placeholder="${esc(t('people'))}" /></label>`
-                : `<label class="cg-form-full">${icon(FIELD_ICON[k] || 'edit')}<input name="${esc(k)}" placeholder="${esc(t(k))}" /></label>`,
+                ? `<label>${icon('group')}<input name="people" type="number" min="1" max="20" aria-label="${esc(t('people'))}" placeholder="${esc(t('people'))}" /></label>`
+                : `<label class="cg-form-full">${icon(FIELD_ICON[k] || 'edit')}<input name="${esc(k)}" aria-label="${esc(t(k))}" placeholder="${esc(t(k))}" /></label>`,
         )
         .join('')}
       <div class="cg-form-msg" data-role="form-msg"></div>
@@ -543,6 +575,7 @@ export function createUi({ root, globe, config, room = null }) {
   }
   function openRequest(type, { preset = '', fields } = {}) {
     const action = HOTEL_ACTIONS.find((a) => a.key === type);
+    state.chat.open = false;
     state.requestForm = { type, title: action ? L(action.name) : preset || type, preset, fields: fields || (action ? null : ['when', 'people', 'details']) };
     setTab('tasks');
     renderTasks();
@@ -550,6 +583,7 @@ export function createUi({ root, globe, config, room = null }) {
     sidePanel.querySelector('[name="room"]')?.focus();
   }
   async function pollRequests() {
+    if (document.hidden) return; // no polling in background tabs
     const ids = state.requests.map((r) => r.id);
     if (!ids.length) return;
     try {
@@ -599,11 +633,11 @@ export function createUi({ root, globe, config, room = null }) {
   function renderChat() {
     const c = state.chat;
     sidePanel.innerHTML = `
-      <div class="cg-head"><button class="cg-back" data-action="chat-close">${icon('arrow_back')}</button>
+      <div class="cg-head"><button class="cg-back" data-action="chat-close" aria-label="${esc(t('back'))}">${icon('arrow_back')}</button>
         <div class="cg-head-text"><h2>${esc(t('chatTitle'))}</h2><div class="cg-sub">${esc(HOTEL.name)}</div></div></div>
       <div class="cg-chat" data-role="chat-list">${c.messages.length ? c.messages.map(chatBubble).join('') : `<p class="cg-muted">${esc(t('chatEmpty'))}</p>`}</div>
       <form class="cg-chat-form" data-role="chat-form">
-        ${c.requestId && requestTitle(c.requestId) ? `<div class="cg-chat-ctx">${icon('reply')} ${esc(t('about'))} <b>${esc(requestTitle(c.requestId))}</b><button type="button" class="cg-x" data-action="chat-ctx-clear">${icon('close')}</button></div>` : ''}
+        ${c.requestId && requestTitle(c.requestId) ? `<div class="cg-chat-ctx">${icon('reply')} ${esc(t('about'))} <b>${esc(requestTitle(c.requestId))}</b><button type="button" class="cg-x" data-action="chat-ctx-clear" aria-label="${esc(t('cancel'))}">${icon('close')}</button></div>` : ''}
         <div class="cg-chat-row"><textarea name="body" rows="1" maxlength="1000" placeholder="${esc(t('chatPlaceholder'))}"></textarea>
         <button class="cg-send" type="submit" aria-label="${esc(t('send'))}">${icon('send')}</button></div>
       </form>`;
@@ -626,12 +660,13 @@ export function createUi({ root, globe, config, room = null }) {
       const { messages, unread } = await fetchChat(c.lastId, visible);
       const fresh = appendMessages(messages);
       const incoming = fresh.filter((m) => m.author !== 'guest');
+      const unreadChanged = c.unread !== (visible ? 0 : unread);
       c.unread = visible ? 0 : unread;
       if (incoming.length && !visible && c.lastId && incoming.some((m) => m.author === 'staff' || m.body.startsWith('status:'))) {
         showToast(t('chatReply'));
         if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(120);
       }
-      if (fresh.length || !visible) {
+      if (fresh.length || (!visible && unreadChanged)) {
         if (c.open) {
           const list = sidePanel.querySelector('[data-role="chat-list"]');
           const input = sidePanel.querySelector('[data-role="chat-form"] textarea');
@@ -659,6 +694,7 @@ export function createUi({ root, globe, config, room = null }) {
   function showToast(text) {
     const banner = document.createElement('div');
     banner.className = 'cg-toast';
+    banner.setAttribute('role', 'status');
     banner.textContent = text;
     root.appendChild(banner);
     setTimeout(() => banner.remove(), 4000);
@@ -669,7 +705,7 @@ export function createUi({ root, globe, config, room = null }) {
     chatTimer = setTimeout(async () => {
       await pollChat();
       scheduleChat();
-    }, state.chat.open ? 4000 : 15000);
+    }, document.hidden ? 60000 : state.chat.open ? 4000 : 15000);
   }
   function openChat(requestId = null) {
     state.chat.open = true;
@@ -692,7 +728,10 @@ export function createUi({ root, globe, config, room = null }) {
     const p = placeOf(v);
     const box = panel.querySelector('[data-role="route"]');
     const mode = state.routeMode;
-    track('route', mode);
+    const quiet = state.quietRoute;
+    state.quietRoute = false;
+    state.noFly = quiet;
+    if (!quiet) track('route', mode);
     const key = `${mode}|${p.lat},${p.lon}|${getLang()}`;
     try {
       let result = state.routeCache.get(key);
@@ -732,7 +771,7 @@ export function createUi({ root, globe, config, room = null }) {
     const pts = [...steps.map((s) => ({ lat: s.lat, lon: s.lon, text: s.instruction || s.name || '' })), { lat: p.lat, lon: p.lon, text: t('arrived') }];
     box._guide = pts.map((pt, i) => ({ ...pt, kind: 'walk', seg: pts[i + 1] ? sliceRoute(geom, pt, pts[i + 1]) : [] }));
     globe.drawRoute([{ coords: geom, mode: 'WALK', color: mode === 'bike' ? '#7CFC9A' : '#4cc3ff' }]);
-    globe.flyToRoute(geom, [HOTEL, p]);
+    if (!state.noFly) globe.flyToRoute(geom, [HOTEL, p]);
   }
 
   function renderTransit(box, data, p) {
@@ -786,7 +825,7 @@ export function createUi({ root, globe, config, room = null }) {
           ${r.legs
             .map((l, i) =>
               l.mode === 'TRANSIT'
-                ? `<li class="cg-tl-item ride" data-action="guide-step" data-i="${i}" style="--line:${esc(l.transit.color || '#ff9f43')}">
+                ? `<li class="cg-tl-item ride" data-action="guide-step" data-i="${i}" style="--line:${/^#[0-9a-f]{3,8}$/i.test(l.transit.color || '') ? l.transit.color : '#ff9f43'}">
                     <span class="cg-tl-dot"></span>
                     <div>
                       <div class="cg-tl-linerow">${lineBadge(l.transit)} <span class="cg-tl-head2">${esc(t('towards'))} ${esc(l.transit.headsign)}</span></div>
@@ -817,7 +856,7 @@ export function createUi({ root, globe, config, room = null }) {
     box._paint = paint;
     paint();
     drawTransit(routes[0]);
-    globe.flyToRoute(routes[0].polyline || routes[0].legs.flatMap((l) => l.polyline || []), [HOTEL, p]);
+    if (!state.noFly) globe.flyToRoute(routes[0].polyline || routes[0].legs.flatMap((l) => l.polyline || []), [HOTEL, p]);
     state.tick = setInterval(() => {
       if (!document.body.contains(box)) return clearInterval(state.tick);
       paint();
@@ -825,8 +864,9 @@ export function createUi({ root, globe, config, room = null }) {
   }
 
   function lineBadge(tr, small = false) {
-    const bg = tr.color || '#ff9f43';
-    const fg = tr.textColor || '#1a1408';
+    const hex = (c, d) => (/^#[0-9a-f]{3,8}$/i.test(String(c || '')) ? c : d);
+    const bg = hex(tr.color, '#ff9f43');
+    const fg = hex(tr.textColor, '#1a1408');
     return `<span class="cg-line ${small ? 'sm' : ''}" style="background:${esc(bg)};color:${esc(fg)}">${icon(VEHICLE_ICON[tr.vehicle] || 'directions_bus')} ${esc(tr.line)}</span>`;
   }
 
@@ -966,12 +1006,16 @@ export function createUi({ root, globe, config, room = null }) {
     const langBtn = e.target.closest('[data-lang]');
     if (langBtn) {
       setLang(langBtn.dataset.lang);
-      root.querySelectorAll('[data-lang]').forEach((b) => b.classList.toggle('on', b === langBtn));
+      root.querySelectorAll('[data-lang]').forEach((b) => {
+        b.classList.toggle('on', b === langBtn);
+        b.setAttribute('aria-pressed', String(b === langBtn));
+      });
       for (const p of POIS) {
         const ent = globe.viewer.entities.getById(`marker:${p.id}`);
         if (ent) ent.label.text = L(p.name);
       }
       state.routeCache.clear();
+      state.quietRoute = true;
       render();
       return;
     }
@@ -982,6 +1026,10 @@ export function createUi({ root, globe, config, room = null }) {
     const a = el.dataset.action;
     const id = el.dataset.id;
     if (a === 'back') back();
+    // Keyboard activation of the sheet handle (pointer taps are handled by the drag code).
+    else if (a === 'sheet-cycle') {
+      if (e.detail === 0) setSheet(SNAPS[(SNAPS.indexOf(state.sheet) + 1) % SNAPS.length]);
+    }
     else if (a === 'home-view') globe.flyTo({ lat: HOTEL.lat, lon: HOTEL.lon, ...HOTEL.welcomeView });
     else if (a === 'open-poi') openPoi(id);
     else if (a === 'open-poi-mode') {
@@ -1030,7 +1078,11 @@ export function createUi({ root, globe, config, room = null }) {
       if (state.plan.has(id)) state.plan.delete(id);
       else state.plan.add(id);
       saveSet('concierge.plan', state.plan);
+      state.quietRoute = true;
+      const scroll = panel.scrollTop;
       render();
+      panel.scrollTop = scroll;
+      panel.querySelector(`[data-action="toggle-plan"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
     } else if (a === 'chat-open') openChat(el.dataset.request || null);
     else if (a === 'chat-close') {
       state.chat.open = false;
@@ -1104,6 +1156,7 @@ export function createUi({ root, globe, config, room = null }) {
       renderTasks();
       const banner = document.createElement('div');
       banner.className = 'cg-toast';
+    banner.setAttribute('role', 'status');
       banner.textContent = t('requestSent');
       root.appendChild(banner);
       setTimeout(() => banner.remove(), 4000);
@@ -1249,7 +1302,13 @@ export function createUi({ root, globe, config, room = null }) {
   setTab('explore');
   render();
   refreshWeather();
-  setInterval(refreshWeather, 15 * 60_000);
+  setInterval(() => !document.hidden && refreshWeather(), 15 * 60_000);
+  // Back to the foreground: catch up at once instead of waiting for the next tick.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    pollRequests();
+    pollChat();
+  });
   track('open', room ? 'qr' : 'web');
   return { go, back, render };
 }

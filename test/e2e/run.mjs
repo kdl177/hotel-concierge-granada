@@ -195,6 +195,13 @@ try {
   await tap(guest, '.cg-act[data-action=request]');
   await guest.waitForSelector('form[data-role=request-form] input[name=room]');
   const roomVal = await guest.$eval('form[data-role=request-form] input[name=room]', (e) => e.value);
+  // Re-rendering (here: switching language) must keep what the guest is typing.
+  await guest.$eval('form[data-role=request-form] textarea[name=details]', (e) => { e.value = 'Dos adultos, por la mañana'; });
+  await tap(guest, '[data-lang=en]');
+  await tap(guest, '[data-lang=es]');
+  const kept = await guest.$eval('form[data-role=request-form] textarea[name=details]', (e) => e.value);
+  if (kept !== 'Dos adultos, por la mañana') throw new Error(`form text lost on re-render: "${kept}"`);
+  ok('typed text survives a re-render of the panel');
   if (roomVal !== '204') throw new Error(`room not prefilled: ${roomVal}`);
   await tap(guest, 'form[data-role=request-form] button[type=submit]');
   await guest.waitForSelector('.cg-toast');

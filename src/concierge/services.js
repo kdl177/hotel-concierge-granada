@@ -8,7 +8,9 @@ export function setContext(next) {
 }
 const HOTEL = new Proxy({}, { get: (_, k) => CTX.hotel[k] });
 
-const GRANADA_BOUNDS = '37.05,-3.75|37.30,-3.45';
+/** ~15 km box around the hotel, so search works for any hotel's city. */
+const hotelBounds = () => `${(HOTEL.lat - 0.13).toFixed(3)},${(HOTEL.lon - 0.16).toFixed(3)}|${(HOTEL.lat + 0.13).toFixed(3)},${(HOTEL.lon + 0.16).toFixed(3)}`;
+const city = () => (HOTEL.city ? ` ${HOTEL.city}` : '');
 
 function haversineM(a, b) {
   const R = 6371000;
@@ -79,7 +81,7 @@ export async function searchPlaces(query, { signal } = {}) {
   const results = [...local];
   try {
     const res = await fetch(
-      `/api/google/text-search?q=${encodeURIComponent(query + ' Granada')}&lat=${HOTEL.lat}&lon=${HOTEL.lon}`,
+      `/api/google/text-search?q=${encodeURIComponent(query + city())}&lat=${HOTEL.lat}&lon=${HOTEL.lon}`,
       { signal },
     );
     const data = await res.json();
@@ -98,7 +100,7 @@ export async function searchPlaces(query, { signal } = {}) {
   } catch {}
   try {
     const res = await fetch(
-      `/api/geocode?q=${encodeURIComponent(query + ', Granada')}&bounds=${encodeURIComponent(GRANADA_BOUNDS)}`,
+      `/api/geocode?q=${encodeURIComponent(query + (HOTEL.city ? `, ${HOTEL.city}` : ''))}&bounds=${encodeURIComponent(hotelBounds())}`,
       { signal },
     );
     const data = await res.json();
