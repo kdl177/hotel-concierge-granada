@@ -61,6 +61,9 @@ Datos persistentes en el volumen `concierge-data`. Copia de seguridad: `docker c
 ## Flujo de una solicitud
 Huésped (app) → `POST /api/h/:slug/requests` → SQLite → recepción la ve al instante (pitido), la asigna, confirma y añade nota → el huésped ve el estado en "Mis solicitudes". Cada cambio dispara el webhook del hotel (Admin → Hotel) y el global.
 
+## Buscador "de todo" (sin claves)
+El huésped puede buscar cualquier cosa: *farmacia*, *para comer*, *cajero*, *supermercado*, *médico*, *taxi*… o el nombre de un sitio (*Bar Los Diamantes*). El servidor traduce la palabra (en es/en/fr/de) a categorías de OpenStreetMap y consulta Overpass alrededor del hotel (2,5 km; 6 km para nombres). Devuelve horario, teléfono, web, cocina y accesibilidad cuando OSM los tiene. Diccionario de categorías en `server/app/places.js` (fácil de ampliar). Caché 15 min y límite por IP. Variable opcional `CONCIERGE_OVERPASS_URL` para usar un Overpass propio.
+
 ## Transporte público (horarios oficiales, sin Google)
 La app calcula rutas en bus y metro con los horarios GTFS oficiales, en el propio servidor (sin claves ni coste por consulta).
 

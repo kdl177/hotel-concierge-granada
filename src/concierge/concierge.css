@@ -370,3 +370,14 @@ h3::before, .cg-sec::before { content: ''; display: inline-block; width: 7px; he
 .cg-langs button, .cg-seg button { position: relative; }
 .cg-grip { display: block; width: 100%; border: 0; background: transparent; padding: 10px 0 8px; color: inherit; }
 .cg-grip:focus-visible { box-shadow: inset var(--focus); }
+/* Search anything */
+.cg-quick { margin: 4px 0 2px; }
+.cg-quick .cg-chips { flex-wrap: nowrap; overflow-x: auto; margin: 0 -16px; padding: 2px 16px 4px; scrollbar-width: none; }
+.cg-quick .cg-chips::-webkit-scrollbar { display: none; }
+.cg-quick .cg-chip { flex: none; }
+.cg-search-head { display: flex; align-items: center; gap: 6px; margin: 4px 0 8px; font-size: var(--fs-md); }
+.cg-search-head .msym { color: var(--oro); }
+.cg-card-hours { font-size: var(--fs-xs); color: var(--arrayan); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cg-card-hours .msym { font-size: 14px; vertical-align: -2px; }
+.cg-src-note { display: flex; gap: 6px; align-items: flex-start; margin: 8px 0 0; font-size: var(--fs-xs); color: var(--cal-dim); line-height: 1.4; }
+.cg-src-note .msym { font-size: 16px; flex: none; }

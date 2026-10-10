@@ -84,7 +84,7 @@ const STRINGS = {
     departsAt: 'Sale a las',
     welcome: 'Bienvenido a Granada',
     tagline: '¿Qué le apetece hacer hoy?',
-    searchPlaceholder: 'Buscar un lugar, monumento, barrio…',
+    searchPlaceholder: 'Busca lo que necesites: farmacia, comer, cajero…',
     suggestions: 'Sugerencias para ahora',
     explore: 'Explorar',
     hotel: 'En el hotel',
@@ -119,6 +119,15 @@ const STRINGS = {
     evening: 'Al atardecer',
     night: 'Esta noche',
     searchResults: 'Resultados',
+    unnamedPlace: 'Sin nombre',
+    searchOffline: 'No se ha podido buscar. Comprueba la conexión.',
+    noResultsNear:
+      'No hay nada con ese nombre cerca del hotel. Prueba con otra palabra: farmacia, comer, cajero…',
+    nNearby: '{n} cerca del hotel',
+    osmNote:
+      'Datos de OpenStreetMap. Los horarios pueden cambiar: confírmalos antes de ir.',
+    accessible: 'Accesible',
+    website: 'Web',
     startError:
       'No se ha podido abrir la guía. Comprueba la conexión e inténtalo de nuevo.',
     retry: 'Reintentar',
@@ -239,7 +248,7 @@ const STRINGS = {
     departsAt: 'Leaves at',
     welcome: 'Welcome to Granada',
     tagline: 'What would you like to do today?',
-    searchPlaceholder: 'Search a place, monument, quarter…',
+    searchPlaceholder: 'Search anything: pharmacy, food, ATM…',
     suggestions: 'Suggestions for now',
     explore: 'Explore',
     hotel: 'At the hotel',
@@ -273,6 +282,15 @@ const STRINGS = {
     evening: 'At sunset',
     night: 'Tonight',
     searchResults: 'Results',
+    unnamedPlace: 'Unnamed',
+    searchOffline: 'Search is unavailable right now. Check your connection.',
+    noResultsNear:
+      'Nothing by that name near the hotel. Try another word: pharmacy, eat, ATM…',
+    nNearby: '{n} near the hotel',
+    osmNote:
+      'Data from OpenStreetMap. Opening hours can change: confirm before you go.',
+    accessible: 'Accessible',
+    website: 'Website',
     startError:
       'The guide could not be opened. Check your connection and try again.',
     retry: 'Try again',
@@ -394,7 +412,7 @@ const STRINGS = {
     departsAt: 'Départ à',
     welcome: 'Bienvenue à Grenade',
     tagline: 'Que souhaitez-vous faire aujourd’hui ?',
-    searchPlaceholder: 'Chercher un lieu, monument, quartier…',
+    searchPlaceholder: 'Cherchez : pharmacie, manger, distributeur…',
     suggestions: 'Suggestions pour maintenant',
     explore: 'Explorer',
     hotel: 'À l’hôtel',
@@ -428,6 +446,15 @@ const STRINGS = {
     evening: 'Au coucher du soleil',
     night: 'Ce soir',
     searchResults: 'Résultats',
+    unnamedPlace: 'Sans nom',
+    searchOffline: 'Recherche indisponible. Vérifiez la connexion.',
+    noResultsNear:
+      'Rien de ce nom près de l’hôtel. Essayez un autre mot : pharmacie, manger, distributeur…',
+    nNearby: '{n} près de l’hôtel',
+    osmNote:
+      'Données OpenStreetMap. Les horaires peuvent changer : vérifiez avant d’y aller.',
+    accessible: 'Accessible',
+    website: 'Site web',
     startError:
       'Impossible d’ouvrir le guide. Vérifiez la connexion et réessayez.',
     retry: 'Réessayer',
@@ -548,7 +575,7 @@ const STRINGS = {
     departsAt: 'Abfahrt um',
     welcome: 'Willkommen in Granada',
     tagline: 'Was möchten Sie heute unternehmen?',
-    searchPlaceholder: 'Ort, Monument, Viertel suchen…',
+    searchPlaceholder: 'Suchen: Apotheke, Essen, Geldautomat…',
     suggestions: 'Vorschläge für jetzt',
     explore: 'Entdecken',
     hotel: 'Im Hotel',
@@ -582,6 +609,15 @@ const STRINGS = {
     evening: 'Zum Sonnenuntergang',
     night: 'Heute Abend',
     searchResults: 'Ergebnisse',
+    unnamedPlace: 'Ohne Namen',
+    searchOffline: 'Suche gerade nicht möglich. Bitte Verbindung prüfen.',
+    noResultsNear:
+      'Nichts mit diesem Namen in Hotelnähe. Versuchen Sie ein anderes Wort: Apotheke, essen, Geldautomat…',
+    nNearby: '{n} in Hotelnähe',
+    osmNote:
+      'Daten von OpenStreetMap. Öffnungszeiten können sich ändern: vorher prüfen.',
+    accessible: 'Barrierefrei',
+    website: 'Website',
     startError:
       'Der Guide konnte nicht geöffnet werden. Bitte Verbindung prüfen und erneut versuchen.',
     retry: 'Erneut versuchen',

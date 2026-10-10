@@ -271,3 +271,14 @@ test('moderation: reception can block and unblock an abusive guest device', asyn
   assert.ok(!mine.data.messages.some((m) => m.body === 'blocked' || m.body === 'unblocked'), 'moderation notes stay internal');
   assert.equal((await client(app.base).post(`/api/staff/chats/${key}/block`, {})).status, 401);
 });
+
+test('guest search endpoint: categories list and graceful 503 when OSM is unreachable', async () => {
+  const c = client(app.base);
+  const cats = await c.get('/api/h/default/places/categories');
+  assert.equal(cats.status, 200);
+  assert.ok(cats.data.categories.some((x) => x.key === 'pharmacy' && x.label.es === 'Farmacias'));
+  const r = await c.get('/api/h/default/places?q=farmacia');
+  assert.equal(r.status, 503, 'test app has no network → honest error, not an empty "no results"');
+  assert.equal(r.data.category.key, 'pharmacy');
+  assert.equal((await c.get('/api/h/default/places?q=a')).data.places.length, 0);
+});

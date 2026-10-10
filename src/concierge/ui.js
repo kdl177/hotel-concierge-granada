@@ -12,6 +12,7 @@ import { POI_CATEGORIES } from './data/pois.js';
 import { LANGS, LANG_LABELS, getLang, setLang, t, L } from './i18n.js';
 import {
   searchPlaces,
+  fetchSearchCategories,
   fetchRoute,
   fetchTransit,
   distanceFromHotelM,
@@ -74,6 +75,9 @@ export function createUi({ root, globe, config, room = null }) {
     abort: null,
     searchTimer: null,
     searchResults: null,
+    searchCategory: null,
+    searchError: null,
+    quickCats: [],
     tick: null,
     guideTimer: null,
     guide: null, // { steps: [{lat,lon,text}], i }
@@ -366,6 +370,7 @@ export function createUi({ root, globe, config, room = null }) {
       <div class="cg-hero"><h1>${esc(t('welcome'))}</h1><p>${esc(t('tagline'))}</p></div>
       ${weatherCard()}
       ${searchBox()}
+      ${state.quickCats.length ? `<div class="cg-quick">${quickSearch(6)}</div>` : ''}
       <h2 class="cg-sec">${esc(t('suggestions'))} <span class="cg-moment">· ${esc(t(moment))}</span></h2>
       <div class="cg-row">${suggested.map((p) => poiCard(p)).join('')}</div>
       <h2 class="cg-sec">${esc(t('hotel'))} ${openNow.length ? `<span class="cg-moment">· ${esc(t('openNow'))}</span>` : ''}</h2>
@@ -428,6 +433,22 @@ export function createUi({ root, globe, config, room = null }) {
       }`;
   }
 
+  /** Card for an OpenStreetMap result (pharmacy, bar, shop…). */
+  function placeCard(r) {
+    const meta = [
+      r.cuisine,
+      r.address,
+      formatDistance(r.distanceM ?? distanceFromHotelM(r), t),
+    ].filter(Boolean);
+    return `<button class="cg-card wide" data-action="open-place" data-id="${esc(r.id)}">
+        <div class="cg-card-icon">${icon(r.icon || 'place')}</div>
+        <div class="cg-card-body"><div class="cg-card-title">${esc(r.name || t('unnamedPlace'))}</div>
+        <div class="cg-card-meta">${esc(meta.join(' · '))}</div>
+        ${r.hours ? `<div class="cg-card-hours">${icon('schedule')} ${esc(r.hours)}</div>` : ''}</div>
+        ${icon('chevron_right', 'cg-chev')}
+      </button>`;
+  }
+
   function renderSearch(v) {
     let body;
     if (v.cat) {
@@ -435,25 +456,38 @@ export function createUi({ root, globe, config, room = null }) {
         .map((p) => poiCard(p, { wide: true }))
         .join('')}</div>`;
     } else if (state.searchResults === 'loading') {
-      body = `<p class="cg-muted">${esc(t('searching'))}</p>`;
+      body = `<div class="cg-list" aria-busy="true"><div class="cg-skel"></div><div class="cg-skel"></div><div class="cg-skel"></div></div><p class="cg-muted">${esc(t('searching'))}</p>`;
+    } else if (state.searchError && !state.searchResults?.length) {
+      body = `<div class="cg-empty">${icon('cloud_off')}<p>${esc(t('searchOffline'))}</p><button class="cg-btn ghost" data-action="search-retry">${esc(t('retry'))}</button></div>`;
     } else if (!state.searchResults?.length) {
-      body = `<p class="cg-muted">${esc(v.q ? t('noResults') : t('tapPlace'))}</p>`;
+      body = v.q
+        ? `<div class="cg-empty">${icon('search_off')}<p>${esc(t('noResultsNear'))}</p></div>`
+        : quickSearch();
     } else {
-      body = `<div class="cg-list">${state.searchResults
-        .map((r) =>
-          r.kind === 'poi'
-            ? poiCard(r.poi, { wide: true })
-            : `<button class="cg-card wide" data-action="open-place" data-id="${esc(r.id)}">
-                <div class="cg-card-icon">${icon('place')}</div>
-                <div class="cg-card-body"><div class="cg-card-title">${esc(r.name)}</div>
-                <div class="cg-card-meta">${esc(r.address || '')} · ${esc(formatDistance(distanceFromHotelM(r), t))}</div></div>
-                ${icon('chevron_right', 'cg-chev')}
-              </button>`,
-        )
-        .join('')}</div>`;
+      const cat = state.searchCategory;
+      const n = state.searchResults.length;
+      body = `${cat ? `<div class="cg-search-head">${icon(cat.icon)} <b>${esc(L(cat.label))}</b> <span class="cg-muted">· ${esc(t('nNearby', { n }))}</span></div>` : ''}
+        <div class="cg-list" aria-live="polite">${state.searchResults
+          .map((r) =>
+            r.kind === 'poi' ? poiCard(r.poi, { wide: true }) : placeCard(r),
+          )
+          .join('')}</div>
+        <p class="cg-src-note">${icon('public')} ${esc(t('osmNote'))}</p>`;
     }
     const title = v.cat ? L(POI_CATEGORIES[v.cat].label) : t('searchResults');
-    return `${header(title)}${v.cat ? '' : searchBox(v.q || '')}${body}`;
+    return `${header(title)}${v.cat ? '' : searchBox(v.q || '')}<div data-role="results">${body}</div>`;
+  }
+
+  /** Quick chips: what guests ask most. */
+  function quickSearch(limit = 8) {
+    const cats = state.quickCats.slice(0, limit);
+    if (!cats.length) return `<p class="cg-muted">${esc(t('tapPlace'))}</p>`;
+    return `<div class="cg-chips">${cats
+      .map(
+        (c) =>
+          `<button class="cg-chip" data-action="quick-search" data-q="${esc(L(c.label))}">${icon(c.icon)} ${esc(L(c.label))}</button>`,
+      )
+      .join('')}</div>`;
   }
 
   function placeOf(v) {
@@ -498,11 +532,22 @@ export function createUi({ root, globe, config, room = null }) {
       ${v.poi?.photo ? `<img class="cg-hero-photo" src="${esc(v.poi.photo)}" alt="${esc(p.title)}" />` : ''}
       ${v.poi ? `<p class="cg-desc">${esc(L(v.poi.desc))}</p>` : ''}
       <div class="cg-facts">
+        ${v.place?.hours ? `<span>${icon('schedule')} <b>${esc(v.place.hours)}</b></span>` : ''}
+        ${v.place?.cuisine ? `<span>${icon('restaurant')} <b>${esc(v.place.cuisine)}</b></span>` : ''}
+        ${v.place?.wheelchair ? `<span>${icon('accessible')} <b>${esc(t('accessible'))}</b></span>` : ''}
         ${v.poi?.indoor ? `<span>${icon('roofing')} <b>${esc(t('indoor'))}</b></span>` : ''}
         <span>${icon('hotel')} ${esc(t('fromHotel'))}: <b>${esc(formatDistance(d, t))}</b></span>
         ${v.poi ? `<span>${icon('schedule')} ${esc(t('visit'))}: <b>${esc(formatDuration(v.poi.minutes * 60, t))}</b></span>` : ''}
       </div>
       ${v.poi?.actions?.length ? `<div class="cg-acts">${v.poi.actions.map((a) => actionButton(a, v.poi)).join('')}</div>` : ''}
+      ${
+        v.place && (v.place.phone || v.place.website)
+          ? `<div class="cg-acts">
+        ${v.place.phone ? `<a class="cg-act" href="${telHref(v.place.phone)}">${icon('call')}<span>${esc(t('call'))}</span><small>${esc(v.place.phone)}</small></a>` : ''}
+        ${/^https?:\/\//i.test(v.place.website || '') ? `<a class="cg-act" target="_blank" rel="noopener noreferrer" href="${esc(v.place.website)}">${icon('language')}<span>${esc(t('website'))}</span>${icon('open_in_new', 'cg-act-ext')}</a>` : ''}
+      </div>`
+          : ''
+      }
       ${
         v.poi
           ? `<h3>${esc(t('thingsToDo'))}</h3>${tasksChecklist(v.poi)}
@@ -1318,6 +1363,17 @@ export function createUi({ root, globe, config, room = null }) {
         track('service', L(s.name, 'es'));
         go({ name: 'service', service: s });
       }
+    } else if (a === 'quick-search' || a === 'search-retry') {
+      const q = a === 'search-retry' ? state.view.q : el.dataset.q;
+      if (state.view.name !== 'search' || state.view.cat)
+        go({ name: 'search', q });
+      else state.view.q = q;
+      render();
+      const input = panel.querySelector('[data-role="search"]');
+      if (input) {
+        input.value = q;
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+      }
     } else if (a === 'filter-cat')
       go({ name: 'catalog', cat: el.dataset.cat || 'all', sort: 'reco' });
     else if (a === 'catalog-cat' && state.view.name === 'catalog') {
@@ -1496,7 +1552,16 @@ export function createUi({ root, globe, config, room = null }) {
       state.searchTimer = setTimeout(async () => {
         state.searchResults = 'loading';
         renderResultsOnly();
-        const results = await searchPlaces(q);
+        let results = [];
+        try {
+          const data = await searchPlaces(q);
+          results = data.results;
+          state.searchCategory = data.category;
+          state.searchError = data.error || null;
+        } catch (e) {
+          if (e?.name === 'AbortError') return;
+          state.searchError = 'offline';
+        }
         if (state.view.q !== q) return;
         if (q.trim().length >= 3) track('search', q.trim().toLowerCase());
         state.searchResults = results;
@@ -1534,9 +1599,10 @@ export function createUi({ root, globe, config, room = null }) {
     if (!input) return render();
     const tmp = document.createElement('div');
     tmp.innerHTML = renderSearch(state.view);
-    const fresh = tmp.querySelector('.cg-list, .cg-muted');
-    const old = panel.querySelector('.cg-list, .cg-muted');
+    const fresh = tmp.querySelector('[data-role="results"]');
+    const old = panel.querySelector('[data-role="results"]');
     if (fresh && old) old.replaceWith(fresh);
+    else render();
   }
 
   function openPoi(id) {
@@ -1619,6 +1685,13 @@ export function createUi({ root, globe, config, room = null }) {
 
   setTab('explore');
   render();
+  fetchSearchCategories()
+    .then((cats) => {
+      state.quickCats = cats;
+      if (state.view.name === 'home' && !panel.contains(document.activeElement))
+        render();
+    })
+    .catch(() => {});
   refreshWeather();
   setInterval(() => !document.hidden && refreshWeather(), 15 * 60_000);
   // Back to the foreground: catch up at once instead of waiting for the next tick.

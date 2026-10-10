@@ -13,9 +13,6 @@ export function setContext(next) {
 }
 const HOTEL = new Proxy({}, { get: (_, k) => CTX.hotel[k] });
 
-/** ~15 km box around the hotel, so search works for any hotel's city. */
-const hotelBounds = () =>
-  `${(HOTEL.lat - 0.13).toFixed(3)},${(HOTEL.lon - 0.16).toFixed(3)}|${(HOTEL.lat + 0.13).toFixed(3)},${(HOTEL.lon + 0.16).toFixed(3)}`;
 const city = () => (HOTEL.city ? ` ${HOTEL.city}` : '');
 
 function haversineM(a, b) {
@@ -79,10 +76,14 @@ function normalize(s) {
     .replace(/[̀-ͯ]/g, '');
 }
 
-/** Search curated places first, then Google Places, then Nominatim. */
+/**
+ * Search anything: the hotel's curated places first, then OpenStreetMap
+ * around the hotel (pharmacies, restaurants, cash machines, named bars…).
+ * Returns { results, category, error }.
+ */
 export async function searchPlaces(query, { signal } = {}) {
   const q = normalize(query.trim());
-  if (!q) return [];
+  if (!q) return { results: [], category: null };
   const local = CTX.pois
     .filter((p) => {
       const hay = normalize(
@@ -91,50 +92,58 @@ export async function searchPlaces(query, { signal } = {}) {
       return hay.includes(q);
     })
     .map((p) => ({ kind: 'poi', id: p.id, poi: p }));
-  if (local.length >= 3) return local;
-
+  let category = null;
+  let error = null;
   const results = [...local];
   try {
     const res = await fetch(
-      `/api/google/text-search?q=${encodeURIComponent(query + city())}&lat=${HOTEL.lat}&lon=${HOTEL.lon}`,
+      `/api/h/${encodeURIComponent(CTX.slug)}/places?q=${encodeURIComponent(query.trim())}`,
       { signal },
     );
-    const data = await res.json();
-    for (const place of data?.places ?? []) {
-      if (!Number.isFinite(place.latitude)) continue;
-      results.push({
-        kind: 'place',
-        id: `place:${place.id}`,
-        name: place.name,
-        address: place.address,
-        lat: place.latitude,
-        lon: place.longitude,
-      });
-    }
-    if (data?.configured !== false && results.length) return dedupe(results);
-  } catch {}
-  try {
-    const res = await fetch(
-      `/api/geocode?q=${encodeURIComponent(query + (HOTEL.city ? `, ${HOTEL.city}` : ''))}&bounds=${encodeURIComponent(hotelBounds())}`,
-      { signal },
-    );
-    const data = await res.json();
-    for (const r of data?.results ?? []) {
-      const loc = r.geometry?.location;
-      if (!loc) continue;
-      results.push({
-        kind: 'place',
-        id: `osm:${loc.lat},${loc.lng}`,
-        name:
-          r.address_components?.[0]?.long_name ||
-          r.formatted_address.split(',')[0],
-        address: r.formatted_address,
-        lat: loc.lat,
-        lon: loc.lng,
-      });
-    }
-  } catch {}
-  return dedupe(results);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok && !data.places?.length)
+      error = data.error || `search ${res.status}`;
+    category = data.category || null;
+    for (const p of data.places || []) results.push({ kind: 'place', ...p });
+  } catch (e) {
+    if (e?.name === 'AbortError') throw e;
+    error = 'offline';
+  }
+  // Google Places only when configured (keyless servers skip it in one round-trip).
+  if (!results.length && !error) {
+    try {
+      const res = await fetch(
+        `/api/google/text-search?q=${encodeURIComponent(query + city())}&lat=${HOTEL.lat}&lon=${HOTEL.lon}`,
+        { signal },
+      );
+      const data = await res.json();
+      for (const place of data?.places ?? []) {
+        if (!Number.isFinite(place.latitude)) continue;
+        results.push({
+          kind: 'place',
+          id: `place:${place.id}`,
+          name: place.name,
+          address: place.address,
+          lat: place.latitude,
+          lon: place.longitude,
+          icon: 'place',
+          distanceM: Math.round(
+            haversineM(HOTEL, { lat: place.latitude, lon: place.longitude }),
+          ),
+        });
+      }
+    } catch {}
+  }
+  return { results: dedupe(results), category, error };
+}
+
+/** Quick-search categories offered on the home screen. */
+export async function fetchSearchCategories() {
+  const res = await fetch(
+    `/api/h/${encodeURIComponent(CTX.slug)}/places/categories`,
+  );
+  if (!res.ok) throw new Error(`categories ${res.status}`);
+  return (await res.json()).categories || [];
 }
 
 function dedupe(list) {

@@ -54,7 +54,7 @@ for lookup in font['GSUB'].table.LookupList.Lookup:
                     names[n] = glyph_cp[lg.LigGlyph]
 
 tokens = set()
-files = glob.glob(str(ROOT / 'src/concierge/**/*.js'), recursive=True) + glob.glob(str(ROOT / 'src/backoffice/*.js')) + [str(ROOT / 'server/app/api.js')]
+files = glob.glob(str(ROOT / 'src/concierge/**/*.js'), recursive=True) + glob.glob(str(ROOT / 'src/backoffice/*.js')) + [str(ROOT / 'server/app/api.js'), str(ROOT / 'server/app/places.js')]
 for fn in files:
     tokens |= set(re.findall(r"['\"`]([a-z][a-z0-9_]{1,40})['\"`]", Path(fn).read_text()))
 wanted = sorted({t for t in tokens | set(CURATED) if t in names})

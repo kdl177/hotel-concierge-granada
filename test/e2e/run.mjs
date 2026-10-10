@@ -19,7 +19,7 @@ if (!existsSync(path.join(root, 'dist/index.html'))) {
   console.error('dist/ missing: run `npm run build` first');
   process.exit(2);
 }
-const PORT = 4199;
+const PORT = 4197;
 const BASE = `http://127.0.0.1:${PORT}`;
 const ADMIN = { email: 'admin@hotel.local', temp: 'Arranque2026x', pass: 'Granada2026luna' };
 const dir = mkdtempSync(path.join(tmpdir(), 'concierge-e2e-'));

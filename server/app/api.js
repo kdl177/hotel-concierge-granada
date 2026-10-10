@@ -52,6 +52,7 @@ import { createWeather } from './weather.js';
 import { createMedia } from './media.js';
 import { createStats } from './stats.js';
 import { createTransit } from './gtfs.js';
+import { createPlaces } from './places.js';
 
 const LANGS = ['es', 'en', 'fr', 'de'];
 const STATUSES = ['pending', 'confirmed', 'done', 'rejected'];
@@ -164,6 +165,7 @@ export function createApi({
   const media = createMedia({ dataDir });
   const stats = createStats({ db });
   const transit = createTransit({ dataDir });
+  const places = createPlaces(fetchImpl ? { fetchImpl } : {});
 
   // ---------- helpers ----------
   const hotelBySlugStmt = db.prepare(
@@ -1311,6 +1313,7 @@ export function createApi({
   media.mount(app, { admin });
   stats.mount(app, { hotelBySlug, admin });
   transit.mount(app, { hotelBySlug, admin, superadmin: superadminOnly });
+  places.mount(app, { hotelBySlug });
 
   app.use((err, req, res, next) => {
     if (err?.type === 'entity.parse.failed')
