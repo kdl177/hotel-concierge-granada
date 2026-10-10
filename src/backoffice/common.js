@@ -1,28 +1,77 @@
 import { glyph, PICKER_ICONS } from '../design/icons.js';
 /** Shared helpers for the reception and admin screens. */
 // Icon ligatures stay hidden until the symbol font loads (offline: shown after 3 s).
-document.fonts?.load('20px "Concierge Symbols"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
+document.fonts
+  ?.load('20px "Concierge Symbols"')
+  .then(() => document.body.classList.add('icons-ready'))
+  .catch(() => {});
 setTimeout(() => document.body.classList.add('icons-ready'), 3000);
-export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-export const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
+export const esc = (s) =>
+  String(s ?? '').replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ],
+  );
+export const icon = (name, cls = '') =>
+  `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
 export const fmt = (iso) => {
   if (!iso) return '';
-  const d = new Date(iso.includes('T') || iso.includes(' ') ? iso.replace(' ', 'T') + (iso.endsWith('Z') || iso.includes('+') ? '' : 'Z') : iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('es-ES', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  const d = new Date(
+    iso.includes('T') || iso.includes(' ')
+      ? iso.replace(' ', 'T') +
+          (iso.endsWith('Z') || iso.includes('+') ? '' : 'Z')
+      : iso,
+  );
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleString('es-ES', {
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 };
 export const fmtLocal = (v) => {
   if (!v) return '';
   const d = new Date(v);
-  return Number.isNaN(d.getTime()) ? v : d.toLocaleString('es-ES', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  return Number.isNaN(d.getTime())
+    ? v
+    : d.toLocaleString('es-ES', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
 };
 
 export const TYPE_LABEL = {
-  spa: 'Spa / masaje', table: 'Mesa gastrobar', breakfast: 'Desayuno en habitación', taxi: 'Taxi',
-  latecheckout: 'Late check-out', housekeeping: 'Toallas / limpieza', parking: 'Parking',
-  flamenco: 'Flamenco', reception: 'Recepción', tickets: 'Entradas', other: 'Otro',
+  spa: 'Spa / masaje',
+  table: 'Mesa gastrobar',
+  breakfast: 'Desayuno en habitación',
+  taxi: 'Taxi',
+  latecheckout: 'Late check-out',
+  housekeeping: 'Toallas / limpieza',
+  parking: 'Parking',
+  flamenco: 'Flamenco',
+  reception: 'Recepción',
+  tickets: 'Entradas',
+  other: 'Otro',
 };
-export const STATUS_LABEL = { pending: 'Pendiente', confirmed: 'Confirmada', done: 'Hecha', rejected: 'No disponible' };
-export const ROLE_LABEL = { superadmin: 'Superadmin', admin: 'Administrador', reception: 'Recepción', staff: 'Personal' };
+export const STATUS_LABEL = {
+  pending: 'Pendiente',
+  confirmed: 'Confirmada',
+  done: 'Hecha',
+  rejected: 'No disponible',
+};
+export const ROLE_LABEL = {
+  superadmin: 'Superadmin',
+  admin: 'Administrador',
+  reception: 'Recepción',
+  staff: 'Personal',
+};
 
 let hotelOverride = '';
 export function setHotelOverride(id) {
@@ -32,7 +81,10 @@ export function setHotelOverride(id) {
 export async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(`/api${path}`, {
     method,
-    headers: { 'Content-Type': 'application/json', ...(hotelOverride ? { 'X-Hotel': hotelOverride } : {}) },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(hotelOverride ? { 'X-Hotel': hotelOverride } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -46,15 +98,19 @@ export async function api(path, { method = 'GET', body } = {}) {
 
 const AUTH_ERRORS = {
   'invalid credentials': 'Email o contraseña incorrectos',
-  'too many attempts': 'Demasiados intentos. Espera unos minutos y vuelve a probar.',
+  'too many attempts':
+    'Demasiados intentos. Espera unos minutos y vuelve a probar.',
   'wrong password': 'La contraseña actual no es correcta',
-  'invalid or expired link': 'El enlace ha caducado o ya se usó. Pide uno nuevo.',
+  'invalid or expired link':
+    'El enlace ha caducado o ya se usó. Pide uno nuevo.',
   'use letters and numbers': 'Usa letras y números',
-  'new password must be different': 'La nueva contraseña debe ser distinta de la actual',
+  'new password must be different':
+    'La nueva contraseña debe ser distinta de la actual',
 };
 export function authError(err) {
   const m = String(err?.message || '');
-  if (/^min (\d+) characters/.test(m)) return `Mínimo ${m.match(/\d+/)[0]} caracteres, con letras y números`;
+  if (/^min (\d+) characters/.test(m))
+    return `Mínimo ${m.match(/\d+/)[0]} caracteres, con letras y números`;
   if (err?.status === 429) return AUTH_ERRORS['too many attempts'];
   return AUTH_ERRORS[m] || m || 'No se pudo completar. Inténtalo de nuevo.';
 }
@@ -64,7 +120,8 @@ function authCard(title, inner) {
     <div class="brand">${icon('hotel')}<div><h1 class="login-title">${esc(title)}</h1><div class="muted">Concierge · acceso del personal</div></div></div>
     ${inner}</form></main>`;
 }
-const pwHint = '<p class="hint">Mínimo 10 caracteres, con letras y números.</p>';
+const pwHint =
+  '<p class="hint">Mínimo 10 caracteres, con letras y números.</p>';
 
 /** Form helper: disables the button while working and shows errors inline. */
 function bindForm(root, onSubmit) {
@@ -96,16 +153,23 @@ function bindForm(root, onSubmit) {
 /** Forced password change (first sign-in, or after an admin reset). */
 function changePasswordView(root, title, me) {
   return new Promise((resolve) => {
-    root.innerHTML = authCard(title, `
+    root.innerHTML = authCard(
+      title,
+      `
       <p class="notice">${icon('lock_reset')} <span>Hola${me.user.name ? ` ${esc(me.user.name)}` : ''}: por seguridad, crea tu propia contraseña antes de continuar.</span></p>
       <label>Contraseña actual<input name="current" type="password" required autocomplete="current-password" /></label>
       <label>Nueva contraseña<input name="next" type="password" required minlength="10" autocomplete="new-password" /></label>
       <label>Repite la nueva<input name="again" type="password" required minlength="10" autocomplete="new-password" /></label>
       ${pwHint}<div class="err" role="alert" data-err></div>
-      <button class="btn primary" type="submit">Guardar y entrar</button>`);
+      <button class="btn primary" type="submit">Guardar y entrar</button>`,
+    );
     bindForm(root, async (v, errEl) => {
-      if (v.next !== v.again) return (errEl.textContent = 'Las contraseñas no coinciden');
-      await api('/auth/password', { method: 'POST', body: { current: v.current, next: v.next } });
+      if (v.next !== v.again)
+        return (errEl.textContent = 'Las contraseñas no coinciden');
+      await api('/auth/password', {
+        method: 'POST',
+        body: { current: v.current, next: v.next },
+      });
       resolve(await api('/auth/me'));
     });
   });
@@ -113,31 +177,45 @@ function changePasswordView(root, title, me) {
 
 function resetView(root, title, tokenValue) {
   return new Promise(() => {
-    root.innerHTML = authCard(title, `
+    root.innerHTML = authCard(
+      title,
+      `
       <p class="notice">${icon('key')} <span>Crea una contraseña nueva para tu cuenta.</span></p>
       <label>Nueva contraseña<input name="password" type="password" required minlength="10" autocomplete="new-password" /></label>
       <label>Repite la nueva<input name="again" type="password" required minlength="10" autocomplete="new-password" /></label>
       ${pwHint}<div class="err" role="alert" data-err></div>
-      <button class="btn primary" type="submit">Cambiar contraseña</button>`);
+      <button class="btn primary" type="submit">Cambiar contraseña</button>`,
+    );
     bindForm(root, async (v, errEl) => {
-      if (v.password !== v.again) return (errEl.textContent = 'Las contraseñas no coinciden');
-      await api('/auth/reset', { method: 'POST', body: { token: tokenValue, password: v.password } });
+      if (v.password !== v.again)
+        return (errEl.textContent = 'Las contraseñas no coinciden');
+      await api('/auth/reset', {
+        method: 'POST',
+        body: { token: tokenValue, password: v.password },
+      });
       history.replaceState(null, '', location.pathname);
-      root.querySelector('form').innerHTML = `<p class="notice ok">${icon('check_circle')} <span>Contraseña cambiada. Ya puedes entrar.</span></p><a class="btn primary" href="${location.pathname}">Ir al acceso</a>`;
+      root.querySelector('form').innerHTML =
+        `<p class="notice ok">${icon('check_circle')} <span>Contraseña cambiada. Ya puedes entrar.</span></p><a class="btn primary" href="${location.pathname}">Ir al acceso</a>`;
     });
   });
 }
 
 function forgotView(root, title, back) {
-  root.innerHTML = authCard(title, `
+  root.innerHTML = authCard(
+    title,
+    `
     <p class="muted">Escribe el email de tu cuenta y te enviaremos un enlace para crear una contraseña nueva.</p>
     <label>Email<input name="email" type="email" required autocomplete="username" /></label>
     <div class="err" role="alert" data-err></div>
     <button class="btn primary" type="submit">Enviar enlace</button>
-    <button class="btn link" type="button" data-back>Volver</button>`);
+    <button class="btn link" type="button" data-back>Volver</button>`,
+  );
   root.querySelector('[data-back]').addEventListener('click', back);
   bindForm(root, async (v) => {
-    const r = await api('/auth/forgot', { method: 'POST', body: { email: v.email } });
+    const r = await api('/auth/forgot', {
+      method: 'POST',
+      body: { email: v.email },
+    });
     root.querySelector('form').innerHTML = r.emailReset
       ? `<p class="notice ok">${icon('mark_email_read')} <span>Si el email pertenece a una cuenta activa, recibirás un enlace válido durante 30 minutos.</span></p><button class="btn" type="button" data-back>Volver</button>`
       : `<p class="notice">${icon('info')} <span>Este servidor no tiene correo configurado. Pide a un administrador del hotel que te asigne una contraseña temporal desde <b>Admin → Usuarios</b>.</span></p><button class="btn" type="button" data-back>Volver</button>`;
@@ -156,27 +234,37 @@ export async function requireLogin(root, title) {
   if (!me?.user) {
     me = await new Promise((resolve) => {
       const show = () => {
-        root.innerHTML = authCard(title, `
+        root.innerHTML = authCard(
+          title,
+          `
           <label>Email<input name="email" type="email" required autocomplete="username" /></label>
           <label>Contraseña<input name="password" type="password" required autocomplete="current-password" /></label>
           <div class="err" role="alert" data-err></div>
           <button class="btn primary" type="submit">Entrar</button>
-          <button class="btn link" type="button" data-forgot>¿Has olvidado la contraseña?</button>`);
-        root.querySelector('[data-forgot]').addEventListener('click', () => forgotView(root, title, show));
+          <button class="btn link" type="button" data-forgot>¿Has olvidado la contraseña?</button>`,
+        );
+        root
+          .querySelector('[data-forgot]')
+          .addEventListener('click', () => forgotView(root, title, show));
         bindForm(root, async (v) => {
-          await api('/auth/login', { method: 'POST', body: { email: v.email, password: v.password } });
+          await api('/auth/login', {
+            method: 'POST',
+            body: { email: v.email, password: v.password },
+          });
           resolve(await api('/auth/me'));
         });
       };
       show();
     });
   }
-  if (me.user.mustChangePassword) me = await changePasswordView(root, title, me);
+  if (me.user.mustChangePassword)
+    me = await changePasswordView(root, title, me);
   return me;
 }
 
 /** Header button with the account menu: change password, sign out everywhere, sign out. */
-export const accountButton = (user) => `<button class="btn sm" data-account aria-label="Mi cuenta: ${esc(user?.name || user?.email || '')}" title="Mi cuenta">${icon('account_circle')}<span class="hide-sm">${esc(user?.name || 'Cuenta')}</span></button>`;
+export const accountButton = (user) =>
+  `<button class="btn sm" data-account aria-label="Mi cuenta: ${esc(user?.name || user?.email || '')}" title="Mi cuenta">${icon('account_circle')}<span class="hide-sm">${esc(user?.name || 'Cuenta')}</span></button>`;
 export function bindAccount(root, user) {
   root.querySelector('[data-account]')?.addEventListener('click', async () => {
     const v = await modal({
@@ -189,20 +277,29 @@ export function bindAccount(root, user) {
         <div class="row gap"><button type="button" class="btn sm" data-signout>${icon('logout')} Cerrar sesión</button>
         <button type="button" class="btn sm no" data-signout-all>${icon('devices')} Cerrar sesión en todos los dispositivos</button></div>`,
       onOpen: (form, close) => {
-        form.querySelector('[data-signout]').addEventListener('click', async () => {
-          await api('/auth/logout', { method: 'POST' }).catch(() => {});
-          location.reload();
-        });
-        form.querySelector('[data-signout-all]').addEventListener('click', async () => {
-          await api('/auth/logout-all', { method: 'POST' }).catch(() => {});
-          location.reload();
-        });
+        form
+          .querySelector('[data-signout]')
+          .addEventListener('click', async () => {
+            await api('/auth/logout', { method: 'POST' }).catch(() => {});
+            location.reload();
+          });
+        form
+          .querySelector('[data-signout-all]')
+          .addEventListener('click', async () => {
+            await api('/auth/logout-all', { method: 'POST' }).catch(() => {});
+            location.reload();
+          });
       },
     });
     if (!v) return;
     try {
-      await api('/auth/password', { method: 'POST', body: { current: v.current, next: v.next } });
-      toast('Contraseña cambiada. Se ha cerrado la sesión en tus otros dispositivos.');
+      await api('/auth/password', {
+        method: 'POST',
+        body: { current: v.current, next: v.next },
+      });
+      toast(
+        'Contraseña cambiada. Se ha cerrado la sesión en tus otros dispositivos.',
+      );
     } catch (err) {
       toast(authError(err), 'no');
     }
@@ -219,27 +316,33 @@ const API_ERRORS = {
   'invalid e-mail': 'Email del hotel no válido',
   'invalid notification e-mail': 'Email de avisos no válido',
   'not found': 'No encontrado (puede que ya se haya borrado)',
-  'forbidden': 'No tienes permiso para esta acción',
+  forbidden: 'No tienes permiso para esta acción',
   'cannot delete yourself': 'No puedes eliminar tu propia cuenta',
-  'webhook: private address not allowed': 'El webhook no puede apuntar a una red interna',
+  'webhook: private address not allowed':
+    'El webhook no puede apuntar a una red interna',
   'webhook: webhook must use https': 'El webhook debe usar https://',
   'webhook: invalid URL': 'La URL del webhook no es válida',
   'webhook: host not found': 'No se encuentra el servidor del webhook',
   'image too large (max 3 MB)': 'Imagen demasiado grande (máx. 3 MB)',
   'file is not a valid image': 'El archivo no es una imagen válida',
-  'blocked': 'Este dispositivo está bloqueado',
+  blocked: 'Este dispositivo está bloqueado',
   'empty message': 'El mensaje está vacío',
 };
 export function errorText(err) {
   const m = String(err?.message || '');
   if (err?.status === 429) return 'Demasiadas peticiones. Espera un momento.';
-  if (/password: /.test(m)) return authError({ message: m.replace(/^.*password: /, '') });
+  if (/password: /.test(m))
+    return authError({ message: m.replace(/^.*password: /, '') });
   return API_ERRORS[m] || authError(err);
 }
 
 /** Accessible confirmation dialog (replaces window.confirm). */
 export async function confirmDialog(message, submit = 'Confirmar') {
-  const v = await modal({ title: 'Confirmar', body: `<p>${esc(message)}</p>`, submit });
+  const v = await modal({
+    title: 'Confirmar',
+    body: `<p>${esc(message)}</p>`,
+    submit,
+  });
   return !!v;
 }
 
@@ -267,7 +370,13 @@ export function beep() {
 }
 
 /** Simple modal with a form; resolves with the form values or null. */
-export function modal({ title, body, submit = 'Guardar', wide = false, onOpen }) {
+export function modal({
+  title,
+  body,
+  submit = 'Guardar',
+  wide = false,
+  onOpen,
+}) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'modal-wrap';
@@ -290,7 +399,9 @@ export function modal({ title, body, submit = 'Guardar', wide = false, onOpen })
       if (e.key === 'Escape') return close(null);
       if (e.key !== 'Tab') return;
       // Keep Tab inside the dialog.
-      const items = [...form.querySelectorAll('button, input, select, textarea, a[href]')].filter((x) => !x.disabled && x.offsetParent !== null);
+      const items = [
+        ...form.querySelectorAll('button, input, select, textarea, a[href]'),
+      ].filter((x) => !x.disabled && x.offsetParent !== null);
       if (!items.length) return;
       const first = items[0];
       const last = items[items.length - 1];
@@ -317,7 +428,10 @@ export function modal({ title, body, submit = 'Guardar', wide = false, onOpen })
       close(out);
     });
     onOpen?.(form, close);
-    (form.querySelector('input, textarea, select') || form.querySelector('button[type=submit]'))?.focus();
+    (
+      form.querySelector('input, textarea, select') ||
+      form.querySelector('button[type=submit]')
+    )?.focus();
   });
 }
 
@@ -328,5 +442,8 @@ export function iconField(name, value, label = 'Icono') {
 }
 document.addEventListener('input', (e) => {
   const input = e.target.closest?.('.icon-field input');
-  if (input) input.parentElement.querySelector('[data-icon-preview]').innerHTML = icon(input.value.trim());
+  if (input)
+    input.parentElement.querySelector('[data-icon-preview]').innerHTML = icon(
+      input.value.trim(),
+    );
 });

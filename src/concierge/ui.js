@@ -30,14 +30,30 @@ import {
 import { glyph } from '../design/icons.js';
 
 const esc = (s) =>
-  String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  String(s ?? '').replace(
+    /[&<>"']/g,
+    (c) =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
+        c
+      ],
+  );
 // Icon names are ligatures of the symbol font: only [a-z0-9_] ever reaches the DOM.
-const icon = (name, cls = '') => `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
+const icon = (name, cls = '') =>
+  `<span class="msym ${esc(cls)}" aria-hidden="true">${glyph(name)}</span>`;
 const telHref = (n) => `tel:${String(n ?? '').replace(/[^0-9+]/g, '')}`;
 
 /** Custom eight-point "Nasrid star" seal used on verified data (official timetables). */
-const sealSvg = () => '<svg class="seal-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 4.2 4.8-1.1-1.1 4.8 4.2 2.6-4.2 2.6 1.1 4.8-4.8-1.1L12 22.5l-2.6-4.2-4.8 1.1 1.1-4.8L1.5 12l4.2-2.6-1.1-4.8 4.8 1.1z" fill="currentColor"/><path d="M8.2 12.3l2.4 2.4 5.2-5.2" fill="none" stroke="var(--seal-ink,#14110a)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-const VEHICLE_ICON = { BUS: 'directions_bus', SUBWAY: 'subway', TRAM: 'tram', LIGHT_RAIL: 'tram', RAIL: 'train', HEAVY_RAIL: 'train', METRO_RAIL: 'subway' };
+const sealSvg = () =>
+  '<svg class="seal-star" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 1.5l2.6 4.2 4.8-1.1-1.1 4.8 4.2 2.6-4.2 2.6 1.1 4.8-4.8-1.1L12 22.5l-2.6-4.2-4.8 1.1 1.1-4.8L1.5 12l4.2-2.6-1.1-4.8 4.8 1.1z" fill="currentColor"/><path d="M8.2 12.3l2.4 2.4 5.2-5.2" fill="none" stroke="var(--seal-ink,#14110a)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+const VEHICLE_ICON = {
+  BUS: 'directions_bus',
+  SUBWAY: 'subway',
+  TRAM: 'tram',
+  LIGHT_RAIL: 'tram',
+  RAIL: 'train',
+  HEAVY_RAIL: 'train',
+  METRO_RAIL: 'subway',
+};
 const SNAPS = ['collapsed', 'half', 'full'];
 
 export function createUi({ root, globe, config, room = null }) {
@@ -45,7 +61,9 @@ export function createUi({ root, globe, config, room = null }) {
   const HOTEL_SERVICES = config.services;
   const HOTEL_ACTIONS = config.actions;
   const POIS = config.pois;
-  const LANGS_ON = HOTEL.langs?.length ? LANGS.filter((l) => HOTEL.langs.includes(l)) : LANGS;
+  const LANGS_ON = HOTEL.langs?.length
+    ? LANGS.filter((l) => HOTEL.langs.includes(l))
+    : LANGS;
   const state = {
     view: { name: 'home' },
     stack: [],
@@ -64,10 +82,25 @@ export function createUi({ root, globe, config, room = null }) {
     requestForm: null, // { type, title, fields, preset }
     requests: loadList('concierge.requests'), // [{id, type, status, ...}]
     requestsTick: null,
-    chat: { open: false, messages: [], lastId: 0, unread: 0, requestId: null, sending: false },
+    chat: {
+      open: false,
+      messages: [],
+      lastId: 0,
+      unread: 0,
+      requestId: null,
+      sending: false,
+    },
     weather: null,
     // From the room QR: room number only; the name is what this device typed before for that same room.
-    guest: room ? { room: room.number, name: loadObj('concierge.guest')?.room === room.number ? loadObj('concierge.guest').name || '' : '' } : loadObj('concierge.guest'), // { room, name }
+    guest: room
+      ? {
+          room: room.number,
+          name:
+            loadObj('concierge.guest')?.room === room.number
+              ? loadObj('concierge.guest').name || ''
+              : '',
+        }
+      : loadObj('concierge.guest'), // { room, name }
   };
 
   root.innerHTML = `
@@ -103,8 +136,21 @@ export function createUi({ root, globe, config, room = null }) {
   const tabs = root.querySelector('.cg-tabs');
   const guideBar = root.querySelector('.cg-guide');
 
-  globe.addMarker({ id: 'hotel', lat: HOTEL.lat, lon: HOTEL.lon, label: HOTEL.name, kind: 'hotel' });
-  for (const p of POIS) globe.addMarker({ id: p.id, lat: p.lat, lon: p.lon, label: L(p.name), kind: 'poi' });
+  globe.addMarker({
+    id: 'hotel',
+    lat: HOTEL.lat,
+    lon: HOTEL.lon,
+    label: HOTEL.name,
+    kind: 'hotel',
+  });
+  for (const p of POIS)
+    globe.addMarker({
+      id: p.id,
+      lat: p.lat,
+      lon: p.lon,
+      label: L(p.name),
+      kind: 'poi',
+    });
 
   /** Guest-friendly text for a failed send (rate limit, blocked device, bad room…). */
   function failText(error) {
@@ -127,7 +173,12 @@ export function createUi({ root, globe, config, room = null }) {
   /** After navigating, move keyboard/screen-reader focus to the new view's title. */
   function focusHeading() {
     const h = panel.querySelector('h1, h2');
-    if (!h || !panel.contains(document.activeElement) && document.activeElement !== document.body) return;
+    if (
+      !h ||
+      (!panel.contains(document.activeElement) &&
+        document.activeElement !== document.body)
+    )
+      return;
     h.tabIndex = -1;
     h.focus({ preventScroll: true });
   }
@@ -148,7 +199,9 @@ export function createUi({ root, globe, config, room = null }) {
     state.sheet = mode;
     sheet.dataset.sheet = mode;
     sheet.style.transform = '';
-    sheet.querySelector('.cg-grip')?.setAttribute('aria-expanded', String(mode === 'full'));
+    sheet
+      .querySelector('.cg-grip')
+      ?.setAttribute('aria-expanded', String(mode === 'full'));
   }
   function setTab(tab) {
     state.tab = tab;
@@ -174,8 +227,10 @@ export function createUi({ root, globe, config, room = null }) {
     panel.scrollTop = 0;
     if (v.name === 'place') loadRoute(v);
     renderTasks();
-    tabs.querySelector('[data-tab="explore"] span:not(.msym)').textContent = t('explore');
-    tabs.querySelector('[data-tab="tasks"] span:not(.msym)').textContent = t('tasks');
+    tabs.querySelector('[data-tab="explore"] span:not(.msym)').textContent =
+      t('explore');
+    tabs.querySelector('[data-tab="tasks"] span:not(.msym)').textContent =
+      t('tasks');
   }
 
   function header(title, sub = '', extra = '') {
@@ -195,8 +250,14 @@ export function createUi({ root, globe, config, room = null }) {
   /** Seals shown on places: each one is backed by real data (see DECISIONES D-01). */
   function poiBadges(p, moment = dayMoment()) {
     const out = [];
-    if (p.best?.includes(moment)) out.push(`<span class="cg-seal ideal">${icon('schedule')}${esc(t('badgeIdeal'))}</span>`);
-    if (p.indoor) out.push(`<span class="cg-seal indoor">${icon('roofing')}${esc(t('badgeIndoor'))}</span>`);
+    if (p.best?.includes(moment))
+      out.push(
+        `<span class="cg-seal ideal">${icon('schedule')}${esc(t('badgeIdeal'))}</span>`,
+      );
+    if (p.indoor)
+      out.push(
+        `<span class="cg-seal indoor">${icon('roofing')}${esc(t('badgeIndoor'))}</span>`,
+      );
     return out.length ? `<div class="cg-seals">${out.join('')}</div>` : '';
   }
   function poiCard(p, { wide = false, badges = false } = {}) {
@@ -213,24 +274,28 @@ export function createUi({ root, globe, config, room = null }) {
     </button>`;
   }
 
-
   // ---------- weather ----------
   const WX = (code, isDay = true) => {
     if (code === 0) return ['clear', isDay ? 'sunny' : 'clear_night'];
-    if (code <= 2) return ['partly', isDay ? 'partly_cloudy_day' : 'partly_cloudy_night'];
+    if (code <= 2)
+      return ['partly', isDay ? 'partly_cloudy_day' : 'partly_cloudy_night'];
     if (code === 3) return ['cloudy', 'cloud'];
     if (code === 45 || code === 48) return ['fog', 'foggy'];
     if (code >= 51 && code <= 57) return ['drizzle', 'rainy_light'];
-    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82)) return ['rain', 'rainy'];
-    if ((code >= 71 && code <= 77) || code === 85 || code === 86) return ['snow', 'weather_snowy'];
+    if ((code >= 61 && code <= 67) || (code >= 80 && code <= 82))
+      return ['rain', 'rainy'];
+    if ((code >= 71 && code <= 77) || code === 85 || code === 86)
+      return ['snow', 'weather_snowy'];
     if (code >= 95) return ['storm', 'thunderstorm'];
     return ['cloudy', 'cloud'];
   };
   function weatherHint(w) {
     const f = w.flags || {};
     if (f.rain) return ['umbrella', t('hintRain')];
-    if (f.hot && dayMoment() !== 'night') return ['device_thermostat', t('hintHot')];
-    if (f.golden) return ['wb_twilight', t('hintSunset', { t: hhmm(w.today.sunset) })];
+    if (f.hot && dayMoment() !== 'night')
+      return ['device_thermostat', t('hintHot')];
+    if (f.golden)
+      return ['wb_twilight', t('hintSunset', { t: hhmm(w.today.sunset) })];
     if (f.cold) return ['ac_unit', t('hintCold')];
     return ['directions_walk', t('hintNice')];
   }
@@ -248,7 +313,10 @@ export function createUi({ root, globe, config, room = null }) {
         <div class="cg-wx-txt"><b>${esc(t('wx_' + cond))}</b><span>${esc(t('weatherNow', { city: HOTEL.city || '' }))} · ${Math.round(w.today.min)}° / ${Math.round(w.today.max)}°</span></div>
       </div>
       <div class="cg-wx-hours">${next
-        .map((h) => `<div><span>${esc(hhmm(h.time))}</span>${icon(WX(h.code, true)[1])}<b>${Math.round(h.temp)}°</b>${h.pop >= 30 ? `<small>${h.pop}%</small>` : ''}</div>`)
+        .map(
+          (h) =>
+            `<div><span>${esc(hhmm(h.time))}</span>${icon(WX(h.code, true)[1])}<b>${Math.round(h.temp)}°</b>${h.pop >= 30 ? `<small>${h.pop}%</small>` : ''}</div>`,
+        )
         .join('')}
         ${w.today.sunset ? `<div class="sun"><span>${esc(t('sunset'))}</span>${icon('wb_twilight')}<b>${esc(hhmm(w.today.sunset))}</b></div>` : ''}
       </div>
@@ -261,25 +329,39 @@ export function createUi({ root, globe, config, room = null }) {
     const f = state.weather?.flags;
     if (f) {
       if (f.rain) s += p.indoor ? 7 : -5;
-      if (f.hot && (moment === 'afternoon' || moment === 'morning')) s += p.indoor ? 4 : -2;
+      if (f.hot && (moment === 'afternoon' || moment === 'morning'))
+        s += p.indoor ? 4 : -2;
       if (f.cold) s += p.indoor ? 2 : 0;
-      if (f.golden && !f.rain) s += p.cat === 'viewpoint' ? 7 : p.cat === 'walk' ? 3 : 0;
+      if (f.golden && !f.rain)
+        s += p.cat === 'viewpoint' ? 7 : p.cat === 'walk' ? 3 : 0;
     }
     return s;
   }
   async function refreshWeather() {
     try {
       state.weather = await fetchWeather();
-      if (state.view.name === 'home' && !panel.contains(document.activeElement)) render();
+      if (state.view.name === 'home' && !panel.contains(document.activeElement))
+        render();
     } catch {}
   }
 
   function renderHome() {
     const moment = dayMoment();
-    const suggested = [...POIS].map((p) => [p, suggestScore(p, moment)]).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([p]) => p);
-    const nearby = [...POIS].sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b)).slice(0, 4);
-    const openNow = HOTEL_SERVICES.filter((s) => isOpenNow(s) === true).slice(0, 4);
-    const cats = Object.entries(POI_CATEGORIES).filter(([k]) => POIS.some((p) => p.cat === k));
+    const suggested = [...POIS]
+      .map((p) => [p, suggestScore(p, moment)])
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([p]) => p);
+    const nearby = [...POIS]
+      .sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b))
+      .slice(0, 4);
+    const openNow = HOTEL_SERVICES.filter((s) => isOpenNow(s) === true).slice(
+      0,
+      4,
+    );
+    const cats = Object.entries(POI_CATEGORIES).filter(([k]) =>
+      POIS.some((p) => p.cat === k),
+    );
     return `
       <div class="cg-hero"><h1>${esc(t('welcome'))}</h1><p>${esc(t('tagline'))}</p></div>
       ${weatherCard()}
@@ -304,15 +386,31 @@ export function createUi({ root, globe, config, room = null }) {
 
   function renderCatalog(v) {
     const moment = dayMoment();
-    const cats = Object.entries(POI_CATEGORIES).filter(([k]) => POIS.some((p) => p.cat === k));
-    let list = POIS.filter((p) => (v.cat === 'all' || p.cat === v.cat) && (!v.now || p.best?.includes(moment)) && (!v.indoor || p.indoor));
-    list = v.sort === 'dist'
-      ? list.sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b))
-      : list.map((p) => [p, suggestScore(p, moment)]).sort((a, b) => b[1] - a[1]).map(([p]) => p);
-    const chip = (cat, label, ic) => `<button class="cg-chip ${v.cat === cat ? 'on' : ''}" data-action="catalog-cat" data-cat="${esc(cat)}" aria-pressed="${v.cat === cat}">${icon(ic)} ${esc(label)}</button>`;
-    const toggle = (key, label, ic) => `<button class="cg-chip toggle ${v[key] ? 'on' : ''}" data-action="catalog-toggle" data-key="${key}" aria-pressed="${!!v[key]}">${icon(ic)} ${esc(label)}</button>`;
+    const cats = Object.entries(POI_CATEGORIES).filter(([k]) =>
+      POIS.some((p) => p.cat === k),
+    );
+    let list = POIS.filter(
+      (p) =>
+        (v.cat === 'all' || p.cat === v.cat) &&
+        (!v.now || p.best?.includes(moment)) &&
+        (!v.indoor || p.indoor),
+    );
+    list =
+      v.sort === 'dist'
+        ? list.sort((a, b) => distanceFromHotelM(a) - distanceFromHotelM(b))
+        : list
+            .map((p) => [p, suggestScore(p, moment)])
+            .sort((a, b) => b[1] - a[1])
+            .map(([p]) => p);
+    const chip = (cat, label, ic) =>
+      `<button class="cg-chip ${v.cat === cat ? 'on' : ''}" data-action="catalog-cat" data-cat="${esc(cat)}" aria-pressed="${v.cat === cat}">${icon(ic)} ${esc(label)}</button>`;
+    const toggle = (key, label, ic) =>
+      `<button class="cg-chip toggle ${v[key] ? 'on' : ''}" data-action="catalog-toggle" data-key="${key}" aria-pressed="${!!v[key]}">${icon(ic)} ${esc(label)}</button>`;
     const filtered = v.cat !== 'all' || v.now || v.indoor;
-    const title = v.cat === 'all' ? t('allPlaces') : L(POI_CATEGORIES[v.cat]?.label) || t('allPlaces');
+    const title =
+      v.cat === 'all'
+        ? t('allPlaces')
+        : L(POI_CATEGORIES[v.cat]?.label) || t('allPlaces');
     return `${header(title, t('nPlaces', { n: list.length }))}
       <div class="cg-filters" role="group" aria-label="${esc(t('category'))}">
         ${chip('all', t('all'), 'apps')}${cats.map(([k, c]) => chip(k, L(c.label), c.icon)).join('')}
@@ -323,15 +421,19 @@ export function createUi({ root, globe, config, room = null }) {
           <button class="${v.sort !== 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="reco" aria-pressed="${v.sort !== 'dist'}">${esc(t('sortReco'))}</button><button class="${v.sort === 'dist' ? 'on' : ''}" data-action="catalog-sort" data-sort="dist" aria-pressed="${v.sort === 'dist'}">${esc(t('sortDist'))}</button>
         </span>
       </div>
-      ${list.length
-        ? `<div class="cg-list" aria-live="polite">${list.map((p) => poiCard(p, { wide: true, badges: true })).join('')}</div>`
-        : `<div class="cg-empty">${icon('travel_explore')}<p>${esc(t('noMatches'))}</p>${filtered ? `<button class="cg-btn ghost" data-action="catalog-clear">${esc(t('clearFilters'))}</button>` : ''}</div>`}`;
+      ${
+        list.length
+          ? `<div class="cg-list" aria-live="polite">${list.map((p) => poiCard(p, { wide: true, badges: true })).join('')}</div>`
+          : `<div class="cg-empty">${icon('travel_explore')}<p>${esc(t('noMatches'))}</p>${filtered ? `<button class="cg-btn ghost" data-action="catalog-clear">${esc(t('clearFilters'))}</button>` : ''}</div>`
+      }`;
   }
 
   function renderSearch(v) {
     let body;
     if (v.cat) {
-      body = `<div class="cg-list">${POIS.filter((p) => p.cat === v.cat).map((p) => poiCard(p, { wide: true })).join('')}</div>`;
+      body = `<div class="cg-list">${POIS.filter((p) => p.cat === v.cat)
+        .map((p) => poiCard(p, { wide: true }))
+        .join('')}</div>`;
     } else if (state.searchResults === 'loading') {
       body = `<p class="cg-muted">${esc(t('searching'))}</p>`;
     } else if (!state.searchResults?.length) {
@@ -361,10 +463,14 @@ export function createUi({ root, globe, config, room = null }) {
 
   function actionButton(a, poi) {
     const label = esc(L(a.label));
-    if (a.url && /^https?:\/\//i.test(a.url)) return `<a class="cg-act" target="_blank" rel="noopener noreferrer" href="${esc(a.url)}">${icon(a.icon || 'open_in_new')}<span>${label}</span>${icon('open_in_new', 'cg-act-ext')}</a>`;
-    if (a.request) return `<button class="cg-act" data-action="request" data-type="${esc(a.request)}" data-preset="${esc(a.request === 'tickets' ? `${t('ticketsVia')} ${L(poi.name)}` : L(poi.name))}">${icon(a.icon || 'support_agent')}<span>${label}</span></button>`;
-    if (a.tel) return `<a class="cg-act" href="${telHref(HOTEL.phone)}">${icon(a.icon || 'call')}<span>${label}</span><small>${esc(HOTEL.phone)}</small></a>`;
-    if (a.mode) return `<button class="cg-act" data-action="open-poi-mode" data-id="${esc(poi.id)}" data-mode="${esc(a.mode)}">${icon(a.icon || 'directions')}<span>${label}</span></button>`;
+    if (a.url && /^https?:\/\//i.test(a.url))
+      return `<a class="cg-act" target="_blank" rel="noopener noreferrer" href="${esc(a.url)}">${icon(a.icon || 'open_in_new')}<span>${label}</span>${icon('open_in_new', 'cg-act-ext')}</a>`;
+    if (a.request)
+      return `<button class="cg-act" data-action="request" data-type="${esc(a.request)}" data-preset="${esc(a.request === 'tickets' ? `${t('ticketsVia')} ${L(poi.name)}` : L(poi.name))}">${icon(a.icon || 'support_agent')}<span>${label}</span></button>`;
+    if (a.tel)
+      return `<a class="cg-act" href="${telHref(HOTEL.phone)}">${icon(a.icon || 'call')}<span>${label}</span><small>${esc(HOTEL.phone)}</small></a>`;
+    if (a.mode)
+      return `<button class="cg-act" data-action="open-poi-mode" data-id="${esc(poi.id)}" data-mode="${esc(a.mode)}">${icon(a.icon || 'directions')}<span>${label}</span></button>`;
     return '';
   }
 
@@ -397,11 +503,18 @@ export function createUi({ root, globe, config, room = null }) {
         ${v.poi ? `<span>${icon('schedule')} ${esc(t('visit'))}: <b>${esc(formatDuration(v.poi.minutes * 60, t))}</b></span>` : ''}
       </div>
       ${v.poi?.actions?.length ? `<div class="cg-acts">${v.poi.actions.map((a) => actionButton(a, v.poi)).join('')}</div>` : ''}
-      ${v.poi ? `<h3>${esc(t('thingsToDo'))}</h3>${tasksChecklist(v.poi)}
-      <button class="cg-btn ${inPlan ? 'ghost' : ''}" data-action="toggle-plan" data-id="${v.poi.id}">${icon(inPlan ? 'bookmark_remove' : 'bookmark_add')} ${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}</button>` : ''}
+      ${
+        v.poi
+          ? `<h3>${esc(t('thingsToDo'))}</h3>${tasksChecklist(v.poi)}
+      <button class="cg-btn ${inPlan ? 'ghost' : ''}" data-action="toggle-plan" data-id="${v.poi.id}">${icon(inPlan ? 'bookmark_remove' : 'bookmark_add')} ${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}</button>`
+          : ''
+      }
       <h3>${esc(t('howToGetThere'))}</h3>
       <div class="cg-modes">${modes
-        .map(([m, ic, label]) => `<button class="cg-mode ${state.routeMode === m ? 'on' : ''}" data-action="mode" data-mode="${m}">${icon(ic)} ${esc(label)}</button>`)
+        .map(
+          ([m, ic, label]) =>
+            `<button class="cg-mode ${state.routeMode === m ? 'on' : ''}" data-action="mode" data-mode="${m}">${icon(ic)} ${esc(label)}</button>`,
+        )
         .join('')}</div>
       <div class="cg-route" data-role="route"><p class="cg-muted">${esc(t('loading'))}</p></div>
     `;
@@ -417,17 +530,18 @@ export function createUi({ root, globe, config, room = null }) {
       ${header(t('hotel'), HOTEL.address)}
       ${[...groups.values()]
         .map(
-          (list) => `<div class="cg-list">${list
-            .map((s) => {
-              const open = isOpenNow(s);
-              return `<button class="cg-card wide" data-action="open-service" data-id="${esc(s.id)}">
+          (list) =>
+            `<div class="cg-list">${list
+              .map((s) => {
+                const open = isOpenNow(s);
+                return `<button class="cg-card wide" data-action="open-service" data-id="${esc(s.id)}">
                 ${s.photo ? `<img class="cg-card-photo" src="${esc(s.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(s.icon)}</div>`}
                 <div class="cg-card-body"><div class="cg-card-title">${esc(L(s.name))}</div>
                 <div class="cg-card-meta">${open === null ? esc(L(s.hours)) : `<span class="cg-dot ${open ? 'open' : 'closed'}"></span>${esc(open ? t('openNow') : t('closedNow'))} · ${esc(L(s.hours))}`}</div></div>
                 ${icon('chevron_right', 'cg-chev')}
               </button>`;
-            })
-            .join('')}</div>`,
+              })
+              .join('')}</div>`,
         )
         .join('')}
       <div class="cg-foot">${esc(L(HOTEL.wifi))}<br/>${esc(L(HOTEL.reception))}</div>
@@ -450,25 +564,45 @@ export function createUi({ root, globe, config, room = null }) {
   // ---------- tasks panel ----------
   /** Re-rendering the side panel (polling, language…) must never wipe what the guest is typing. */
   function renderTasks() {
-    const snap = [...sidePanel.querySelectorAll('form input[name], form textarea[name], form select[name]')].map((el) => [el.closest('form')?.dataset.role, el.name, el.value]);
-    const active = document.activeElement && sidePanel.contains(document.activeElement) ? [document.activeElement.closest('form')?.dataset.role, document.activeElement.name, document.activeElement.selectionStart] : null;
+    const snap = [
+      ...sidePanel.querySelectorAll(
+        'form input[name], form textarea[name], form select[name]',
+      ),
+    ].map((el) => [el.closest('form')?.dataset.role, el.name, el.value]);
+    const active =
+      document.activeElement && sidePanel.contains(document.activeElement)
+        ? [
+            document.activeElement.closest('form')?.dataset.role,
+            document.activeElement.name,
+            document.activeElement.selectionStart,
+          ]
+        : null;
     renderTasksNow();
     for (const [role, name, value] of snap) {
-      const el = sidePanel.querySelector(`form[data-role="${role}"] [name="${CSS.escape(name)}"]`);
+      const el = sidePanel.querySelector(
+        `form[data-role="${role}"] [name="${CSS.escape(name)}"]`,
+      );
       if (el && value !== '' && el.value !== value) el.value = value;
     }
     if (active?.[1]) {
-      const el = sidePanel.querySelector(`form[data-role="${active[0]}"] [name="${CSS.escape(active[1])}"]`);
+      const el = sidePanel.querySelector(
+        `form[data-role="${active[0]}"] [name="${CSS.escape(active[1])}"]`,
+      );
       if (el) {
         el.focus({ preventScroll: true });
-        if (Number.isInteger(active[2])) try { el.setSelectionRange(active[2], active[2]); } catch {}
+        if (Number.isInteger(active[2]))
+          try {
+            el.setSelectionRange(active[2], active[2]);
+          } catch {}
       }
     }
   }
   function renderTasksNow() {
     if (state.chat.open) return renderChat();
     const planPois = POIS.filter((p) => state.plan.has(p.id));
-    const suggestions = POIS.filter((p) => !state.plan.has(p.id)).sort((a, b) => b.priority - a.priority).slice(0, 3);
+    const suggestions = POIS.filter((p) => !state.plan.has(p.id))
+      .sort((a, b) => b.priority - a.priority)
+      .slice(0, 3);
     sidePanel.innerHTML = `
       <div class="cg-side-head"><h2>${esc(t('tasks'))}</h2><div class="cg-sub">${esc(HOTEL.name)}</div></div>
       ${state.requestForm ? renderRequestForm() : ''}
@@ -480,19 +614,22 @@ export function createUi({ root, globe, config, room = null }) {
       <h3>${esc(t('quickActions'))}</h3>
       <div class="cg-grid">
         ${HOTEL_ACTIONS.map((a) =>
-            a.fields?.length
+          a.fields?.length
             ? `<button class="cg-tile" data-action="request" data-type="${esc(a.key)}">${icon(a.icon)}<span>${esc(L(a.name))}</span>${L(a.sub) ? `<small>${esc(L(a.sub))}</small>` : ''}</button>`
             : `<a class="cg-tile" href="${telHref(a.tel || HOTEL.phone)}">${icon(a.icon)}<span>${esc(L(a.name))}</span><small>${esc(a.tel || HOTEL.phone)}</small></a>`,
         ).join('')}
       </div>
       ${renderMyRequests()}
       <h3>${esc(t('myPlan'))}</h3>
-      ${planPois.length
-        ? planPois
-            .map((p) => {
-              const tasks = L(p.tasks) || [];
-              const done = tasks.filter((_, i) => state.done.has(`${p.id}:${i}`)).length;
-              return `<section class="cg-plan-item">
+      ${
+        planPois.length
+          ? planPois
+              .map((p) => {
+                const tasks = L(p.tasks) || [];
+                const done = tasks.filter((_, i) =>
+                  state.done.has(`${p.id}:${i}`),
+                ).length;
+                return `<section class="cg-plan-item">
                 <div class="cg-plan-top">
                   <button class="cg-plan-title" data-action="open-poi" data-id="${esc(p.id)}">${icon(POI_CATEGORIES[p.cat]?.icon || 'place')}<b>${esc(L(p.name))}</b></button>
                   <span class="cg-muted">${esc(t('doneCount', { d: done, n: tasks.length }))}</span>
@@ -502,9 +639,10 @@ export function createUi({ root, globe, config, room = null }) {
                 ${tasksChecklist(p)}
                 <button class="cg-linkbtn" data-action="open-poi-mode" data-id="${p.id}" data-mode="${state.routeMode}">${icon('directions')} ${esc(t('howToGetThere'))}</button>
               </section>`;
-            })
-            .join('')
-        : `<p class="cg-muted">${esc(t('planEmpty'))}</p>`}
+              })
+              .join('')
+          : `<p class="cg-muted">${esc(t('planEmpty'))}</p>`
+      }
       <h3>${esc(t('suggestedForPlan'))}</h3>
       <div class="cg-list">${suggestions
         .map(
@@ -519,11 +657,18 @@ export function createUi({ root, globe, config, room = null }) {
   }
 
   // ---------- guest requests ----------
-  const FIELD_ICON = { when: 'schedule', people: 'group', destination: 'place', details: 'notes' };
+  const FIELD_ICON = {
+    when: 'schedule',
+    people: 'group',
+    destination: 'place',
+    details: 'notes',
+  };
   function renderRequestForm() {
     const f = state.requestForm;
     const action = HOTEL_ACTIONS.find((a) => a.key === f.type);
-    const fields = f.fields || (action?.fields?.length ? action.fields : ['when', 'details']);
+    const fields =
+      f.fields ||
+      (action?.fields?.length ? action.fields : ['when', 'details']);
     const g = state.guest || {};
     return `<form class="cg-form" data-role="request-form">
       <div class="cg-form-head">${icon(action?.icon || 'support_agent')}<b>${esc(f.title)}</b>
@@ -549,7 +694,12 @@ export function createUi({ root, globe, config, room = null }) {
     </form>`;
   }
 
-  const STATUS_ICON = { pending: 'hourglass_top', confirmed: 'check_circle', done: 'task_alt', rejected: 'cancel' };
+  const STATUS_ICON = {
+    pending: 'hourglass_top',
+    confirmed: 'check_circle',
+    done: 'task_alt',
+    rejected: 'cancel',
+  };
   function renderMyRequests() {
     if (!state.requests.length) return '';
     return `<h3>${esc(t('myRequests'))}</h3>
@@ -571,12 +721,25 @@ export function createUi({ root, globe, config, room = null }) {
   }
   function fmtWhen(v) {
     const d = new Date(v);
-    return Number.isNaN(d.getTime()) ? v : d.toLocaleString(getLang(), { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return Number.isNaN(d.getTime())
+      ? v
+      : d.toLocaleString(getLang(), {
+          weekday: 'short',
+          day: 'numeric',
+          month: 'short',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
   }
   function openRequest(type, { preset = '', fields } = {}) {
     const action = HOTEL_ACTIONS.find((a) => a.key === type);
     state.chat.open = false;
-    state.requestForm = { type, title: action ? L(action.name) : preset || type, preset, fields: fields || (action ? null : ['when', 'people', 'details']) };
+    state.requestForm = {
+      type,
+      title: action ? L(action.name) : preset || type,
+      preset,
+      fields: fields || (action ? null : ['when', 'people', 'details']),
+    };
     setTab('tasks');
     renderTasks();
     sidePanel.scrollTop = 0;
@@ -605,7 +768,6 @@ export function createUi({ root, globe, config, room = null }) {
   state.requestsTick = setInterval(pollRequests, 20000);
   pollRequests();
 
-
   // ---------- chat with reception ----------
   const requestTitle = (id) => {
     const r = state.requests.find((x) => x.id === id);
@@ -614,13 +776,23 @@ export function createUi({ root, globe, config, room = null }) {
     return a ? L(a.name) : r.details || r.type;
   };
   function lastChatPreview() {
-    const m = [...state.chat.messages].reverse().find((x) => x.author !== 'system');
-    return m ? `${m.author === 'guest' ? t('you') : t('reception')}: ${m.body}` : '';
+    const m = [...state.chat.messages]
+      .reverse()
+      .find((x) => x.author !== 'system');
+    return m
+      ? `${m.author === 'guest' ? t('you') : t('reception')}: ${m.body}`
+      : '';
   }
   function chatBubble(m) {
-    const time = new Date(m.at.replace(' ', 'T') + 'Z').toLocaleTimeString(getLang(), { hour: '2-digit', minute: '2-digit' });
+    const time = new Date(m.at.replace(' ', 'T') + 'Z').toLocaleTimeString(
+      getLang(),
+      { hour: '2-digit', minute: '2-digit' },
+    );
     if (m.author === 'system') {
-      const label = m.body === 'created' ? t('sysCreated') : t('sysStatus_' + m.body.split(':')[1]);
+      const label =
+        m.body === 'created'
+          ? t('sysCreated')
+          : t('sysStatus_' + m.body.split(':')[1]);
       const title = requestTitle(m.requestId);
       return `<div class="cg-msg sys">${icon(m.body === 'created' ? 'send' : 'info')} ${esc(label)}${title ? ` · <b>${esc(title)}</b>` : ''} <span>${esc(time)}</span></div>`;
     }
@@ -656,25 +828,39 @@ export function createUi({ root, globe, config, room = null }) {
   async function pollChat() {
     const c = state.chat;
     try {
-      const visible = c.open && (state.tab === 'tasks' || window.matchMedia('(min-width: 900px)').matches);
+      const visible =
+        c.open &&
+        (state.tab === 'tasks' ||
+          window.matchMedia('(min-width: 900px)').matches);
       const { messages, unread } = await fetchChat(c.lastId, visible);
       const fresh = appendMessages(messages);
       const incoming = fresh.filter((m) => m.author !== 'guest');
       const unreadChanged = c.unread !== (visible ? 0 : unread);
       c.unread = visible ? 0 : unread;
-      if (incoming.length && !visible && c.lastId && incoming.some((m) => m.author === 'staff' || m.body.startsWith('status:'))) {
+      if (
+        incoming.length &&
+        !visible &&
+        c.lastId &&
+        incoming.some(
+          (m) => m.author === 'staff' || m.body.startsWith('status:'),
+        )
+      ) {
         showToast(t('chatReply'));
         if (navigator.userActivation?.hasBeenActive) navigator.vibrate?.(120);
       }
       if (fresh.length || (!visible && unreadChanged)) {
         if (c.open) {
           const list = sidePanel.querySelector('[data-role="chat-list"]');
-          const input = sidePanel.querySelector('[data-role="chat-form"] textarea');
+          const input = sidePanel.querySelector(
+            '[data-role="chat-form"] textarea',
+          );
           if (list && input) {
             const draft = input.value;
             const focused = document.activeElement === input;
             renderChat();
-            const ni = sidePanel.querySelector('[data-role="chat-form"] textarea');
+            const ni = sidePanel.querySelector(
+              '[data-role="chat-form"] textarea',
+            );
             ni.value = draft;
             if (focused) ni.focus();
           } else renderChat();
@@ -702,10 +888,13 @@ export function createUi({ root, globe, config, room = null }) {
   let chatTimer = null;
   function scheduleChat() {
     clearTimeout(chatTimer);
-    chatTimer = setTimeout(async () => {
-      await pollChat();
-      scheduleChat();
-    }, document.hidden ? 60000 : state.chat.open ? 4000 : 15000);
+    chatTimer = setTimeout(
+      async () => {
+        await pollChat();
+        scheduleChat();
+      },
+      document.hidden ? 60000 : state.chat.open ? 4000 : 15000,
+    );
   }
   function openChat(requestId = null) {
     state.chat.open = true;
@@ -738,8 +927,13 @@ export function createUi({ root, globe, config, room = null }) {
       if (!result) {
         result =
           mode === 'transit'
-            ? await fetchTransit(HOTEL, p, getLang(), { signal: controller.signal, destName: p.title })
-            : await fetchRoute(mode === 'bike' ? 'bike' : 'foot', HOTEL, p, { signal: controller.signal });
+            ? await fetchTransit(HOTEL, p, getLang(), {
+                signal: controller.signal,
+                destName: p.title,
+              })
+            : await fetchRoute(mode === 'bike' ? 'bike' : 'foot', HOTEL, p, {
+                signal: controller.signal,
+              });
         state.routeCache.set(key, result);
       }
       if (controller.signal.aborted) return;
@@ -763,14 +957,38 @@ export function createUi({ root, globe, config, room = null }) {
         <div class="cg-tl-times">${icon(mode === 'bike' ? 'directions_bike' : 'directions_walk')} ${esc(formatDistance(r.distanceM, t))}</div>
       </div>
       <button class="cg-btn" data-action="guide">${icon('navigation')} ${esc(t('guide'))}</button>
-      ${steps.length ? `<ol class="cg-steps">${steps
-        .slice(0, 40)
-        .map((s, i) => `<li data-action="guide-step" data-i="${i}">${esc(s.instruction || s.name || '')}${s.distanceM ? ` <span class="cg-muted">${esc(formatDistance(s.distanceM, t))}</span>` : ''}</li>`)
-        .join('')}</ol>` : ''}`;
+      ${
+        steps.length
+          ? `<ol class="cg-steps">${steps
+              .slice(0, 40)
+              .map(
+                (s, i) =>
+                  `<li data-action="guide-step" data-i="${i}">${esc(s.instruction || s.name || '')}${s.distanceM ? ` <span class="cg-muted">${esc(formatDistance(s.distanceM, t))}</span>` : ''}</li>`,
+              )
+              .join('')}</ol>`
+          : ''
+      }`;
     const geom = Array.isArray(r.geometry) ? r.geometry : [];
-    const pts = [...steps.map((s) => ({ lat: s.lat, lon: s.lon, text: s.instruction || s.name || '' })), { lat: p.lat, lon: p.lon, text: t('arrived') }];
-    box._guide = pts.map((pt, i) => ({ ...pt, kind: 'walk', seg: pts[i + 1] ? sliceRoute(geom, pt, pts[i + 1]) : [] }));
-    globe.drawRoute([{ coords: geom, mode: 'WALK', color: mode === 'bike' ? '#7CFC9A' : '#4cc3ff' }]);
+    const pts = [
+      ...steps.map((s) => ({
+        lat: s.lat,
+        lon: s.lon,
+        text: s.instruction || s.name || '',
+      })),
+      { lat: p.lat, lon: p.lon, text: t('arrived') },
+    ];
+    box._guide = pts.map((pt, i) => ({
+      ...pt,
+      kind: 'walk',
+      seg: pts[i + 1] ? sliceRoute(geom, pt, pts[i + 1]) : [],
+    }));
+    globe.drawRoute([
+      {
+        coords: geom,
+        mode: 'WALK',
+        color: mode === 'bike' ? '#7CFC9A' : '#4cc3ff',
+      },
+    ]);
     if (!state.noFly) globe.flyToRoute(geom, [HOTEL, p]);
   }
 
@@ -848,7 +1066,13 @@ export function createUi({ root, globe, config, room = null }) {
             l.mode === 'TRANSIT'
               ? `${t('line')} ${l.transit.line} ${t('towards')} ${l.transit.headsign} · ${l.transit.from} → ${l.transit.to} (${formatTime(l.transit.departure, lang)})`
               : `${t('walk')} ${formatDuration(l.durationS, t)} · ${l.instruction || ''}`;
-          return { lat: start ? start[1] : p.lat, lon: start ? start[0] : p.lon, text, kind: l.mode === 'TRANSIT' ? 'ride' : 'walk', seg: l.polyline || [] };
+          return {
+            lat: start ? start[1] : p.lat,
+            lon: start ? start[0] : p.lon,
+            text,
+            kind: l.mode === 'TRANSIT' ? 'ride' : 'walk',
+            seg: l.polyline || [],
+          };
         }),
         { lat: p.lat, lon: p.lon, text: t('arrived'), kind: 'end', seg: [] },
       ];
@@ -856,7 +1080,11 @@ export function createUi({ root, globe, config, room = null }) {
     box._paint = paint;
     paint();
     drawTransit(routes[0]);
-    if (!state.noFly) globe.flyToRoute(routes[0].polyline || routes[0].legs.flatMap((l) => l.polyline || []), [HOTEL, p]);
+    if (!state.noFly)
+      globe.flyToRoute(
+        routes[0].polyline || routes[0].legs.flatMap((l) => l.polyline || []),
+        [HOTEL, p],
+      );
     state.tick = setInterval(() => {
       if (!document.body.contains(box)) return clearInterval(state.tick);
       paint();
@@ -874,19 +1102,36 @@ export function createUi({ root, globe, config, room = null }) {
     if (!iso) return '';
     const min = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
     if (min <= 0) return t('now');
-    if (min > 90) return long ? `${t('departsAt')} ${formatTime(iso, getLang())}` : formatTime(iso, getLang());
+    if (min > 90)
+      return long
+        ? `${t('departsAt')} ${formatTime(iso, getLang())}`
+        : formatTime(iso, getLang());
     return long ? t('departsIn', { n: min }) : `${min} ${t('minutes')}`;
   }
 
   function drawTransit(r) {
     globe.removeMarkers('stop');
     globe.drawRoute(
-      r.legs.map((l) => ({ coords: l.polyline, mode: l.mode, color: l.mode === 'TRANSIT' ? l.transit.color || '#ff9f43' : '#4cc3ff' })),
+      r.legs.map((l) => ({
+        coords: l.polyline,
+        mode: l.mode,
+        color: l.mode === 'TRANSIT' ? l.transit.color || '#ff9f43' : '#4cc3ff',
+      })),
     );
     for (const l of r.legs) {
       if (l.mode !== 'TRANSIT') continue;
-      for (const [loc, name] of [[l.transit.fromLoc, l.transit.from], [l.transit.toLoc, l.transit.to]]) {
-        if (loc) globe.addMarker({ id: `stop:${name}`, lat: loc.lat, lon: loc.lon, label: name, kind: 'stop' });
+      for (const [loc, name] of [
+        [l.transit.fromLoc, l.transit.from],
+        [l.transit.toLoc, l.transit.to],
+      ]) {
+        if (loc)
+          globe.addMarker({
+            id: `stop:${name}`,
+            lat: loc.lat,
+            lon: loc.lon,
+            label: name,
+            kind: 'stop',
+          });
       }
     }
   }
@@ -921,7 +1166,9 @@ export function createUi({ root, globe, config, room = null }) {
         <button class="cg-mode" data-action="guide-prev" ${g.i === 0 ? 'disabled' : ''}>${icon('chevron_left')} ${esc(t('prev'))}</button>
         <button class="cg-mode on" data-action="guide-next" ${last ? 'disabled' : ''}>${esc(t('next'))} ${icon('chevron_right')}</button>
       </div>`;
-    panel.querySelectorAll('[data-action="guide-step"]').forEach((el) => el.classList.toggle('on', Number(el.dataset.i) === g.i));
+    panel
+      .querySelectorAll('[data-action="guide-step"]')
+      .forEach((el) => el.classList.toggle('on', Number(el.dataset.i) === g.i));
     globe.showGuide(g.steps, g.i);
     // Debounce: fast taps on Next/Prev only fly to the step the user stops on.
     clearTimeout(state.guideTimer);
@@ -938,10 +1185,22 @@ export function createUi({ root, globe, config, room = null }) {
       return;
     }
     // Stand behind the step, looking along the next stretch of the route.
-    const heading = seg.length > 1 ? headingAlong(seg) : last && g.i > 0 ? bearing(g.steps[g.i - 1], s) : fallbackHeading;
+    const heading =
+      seg.length > 1
+        ? headingAlong(seg)
+        : last && g.i > 0
+          ? bearing(g.steps[g.i - 1], s)
+          : fallbackHeading;
     const len = pathLength(seg);
     const range = last ? 260 : Math.min(520, Math.max(170, len * 0.9));
-    globe.lookAt({ lat: s.lat, lon: s.lon, heading, pitch: last ? -48 : -32, range, duration: 1.1 });
+    globe.lookAt({
+      lat: s.lat,
+      lon: s.lon,
+      heading,
+      pitch: last ? -48 : -32,
+      range,
+      duration: 1.1,
+    });
   }
   function stopGuide() {
     if (!state.guide) return;
@@ -950,18 +1209,25 @@ export function createUi({ root, globe, config, room = null }) {
     globe.clearGuide();
     guideBar.hidden = true;
     delete root.dataset.guide;
-    panel.querySelectorAll('[data-action="guide-step"].on').forEach((el) => el.classList.remove('on'));
+    panel
+      .querySelectorAll('[data-action="guide-step"].on')
+      .forEach((el) => el.classList.remove('on'));
   }
   const distM = (a, b) => {
-    const R = 6371000, toR = Math.PI / 180;
-    const dLat = (b.lat - a.lat) * toR, dLon = (b.lon - a.lon) * toR;
-    const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) ** 2;
+    const R = 6371000,
+      toR = Math.PI / 180;
+    const dLat = (b.lat - a.lat) * toR,
+      dLon = (b.lon - a.lon) * toR;
+    const x =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(a.lat * toR) * Math.cos(b.lat * toR) * Math.sin(dLon / 2) ** 2;
     return 2 * R * Math.asin(Math.sqrt(x));
   };
   const ll = ([lon, lat]) => ({ lat, lon });
   function pathLength(coords) {
     let d = 0;
-    for (let i = 1; i < coords.length; i++) d += distM(ll(coords[i - 1]), ll(coords[i]));
+    for (let i = 1; i < coords.length; i++)
+      d += distM(ll(coords[i - 1]), ll(coords[i]));
     return d;
   }
   /** Direction of travel over the first ~40 m of a stretch (robust to curvy streets). */
@@ -982,10 +1248,14 @@ export function createUi({ root, globe, config, room = null }) {
   function sliceRoute(geom, from, to) {
     if (!geom.length) return [];
     const nearest = (pt, startAt = 0) => {
-      let best = startAt, bd = Infinity;
+      let best = startAt,
+        bd = Infinity;
       for (let i = startAt; i < geom.length; i++) {
         const d = distM(pt, ll(geom[i]));
-        if (d < bd) { bd = d; best = i; }
+        if (d < bd) {
+          bd = d;
+          best = i;
+        }
       }
       return best;
     };
@@ -994,10 +1264,12 @@ export function createUi({ root, globe, config, room = null }) {
     return geom.slice(i0, Math.max(i0 + 2, i1 + 1));
   }
   function bearing(a, b) {
-    const φ1 = (a.lat * Math.PI) / 180, φ2 = (b.lat * Math.PI) / 180;
+    const φ1 = (a.lat * Math.PI) / 180,
+      φ2 = (b.lat * Math.PI) / 180;
     const Δλ = ((b.lon - a.lon) * Math.PI) / 180;
     const y = Math.sin(Δλ) * Math.cos(φ2);
-    const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    const x =
+      Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
     return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
   }
 
@@ -1028,9 +1300,10 @@ export function createUi({ root, globe, config, room = null }) {
     if (a === 'back') back();
     // Keyboard activation of the sheet handle (pointer taps are handled by the drag code).
     else if (a === 'sheet-cycle') {
-      if (e.detail === 0) setSheet(SNAPS[(SNAPS.indexOf(state.sheet) + 1) % SNAPS.length]);
-    }
-    else if (a === 'home-view') globe.flyTo({ lat: HOTEL.lat, lon: HOTEL.lon, ...HOTEL.welcomeView });
+      if (e.detail === 0)
+        setSheet(SNAPS[(SNAPS.indexOf(state.sheet) + 1) % SNAPS.length]);
+    } else if (a === 'home-view')
+      globe.flyTo({ lat: HOTEL.lat, lon: HOTEL.lon, ...HOTEL.welcomeView });
     else if (a === 'open-poi') openPoi(id);
     else if (a === 'open-poi-mode') {
       state.routeMode = el.dataset.mode || 'walk';
@@ -1045,24 +1318,36 @@ export function createUi({ root, globe, config, room = null }) {
         track('service', L(s.name, 'es'));
         go({ name: 'service', service: s });
       }
-    } else if (a === 'filter-cat') go({ name: 'catalog', cat: el.dataset.cat || 'all', sort: 'reco' });
+    } else if (a === 'filter-cat')
+      go({ name: 'catalog', cat: el.dataset.cat || 'all', sort: 'reco' });
     else if (a === 'catalog-cat' && state.view.name === 'catalog') {
       state.view.cat = el.dataset.cat;
       render();
-      panel.querySelector(`[data-action="catalog-cat"][data-cat="${CSS.escape(el.dataset.cat)}"]`)?.focus();
+      panel
+        .querySelector(
+          `[data-action="catalog-cat"][data-cat="${CSS.escape(el.dataset.cat)}"]`,
+        )
+        ?.focus();
     } else if (a === 'catalog-toggle' && state.view.name === 'catalog') {
       state.view[el.dataset.key] = !state.view[el.dataset.key];
       render();
-      panel.querySelector(`[data-action="catalog-toggle"][data-key="${el.dataset.key}"]`)?.focus();
+      panel
+        .querySelector(
+          `[data-action="catalog-toggle"][data-key="${el.dataset.key}"]`,
+        )
+        ?.focus();
     } else if (a === 'catalog-sort' && state.view.name === 'catalog') {
       state.view.sort = el.dataset.sort;
       render();
-      panel.querySelector(`[data-action="catalog-sort"][data-sort="${el.dataset.sort}"]`)?.focus();
+      panel
+        .querySelector(
+          `[data-action="catalog-sort"][data-sort="${el.dataset.sort}"]`,
+        )
+        ?.focus();
     } else if (a === 'catalog-clear' && state.view.name === 'catalog') {
       Object.assign(state.view, { cat: 'all', now: false, indoor: false });
       render();
-    }
-    else if (a === 'mode') {
+    } else if (a === 'mode') {
       state.routeMode = el.dataset.mode;
       stopGuide();
       render();
@@ -1082,7 +1367,11 @@ export function createUi({ root, globe, config, room = null }) {
       const scroll = panel.scrollTop;
       render();
       panel.scrollTop = scroll;
-      panel.querySelector(`[data-action="toggle-plan"][data-id="${CSS.escape(id)}"]`)?.focus({ preventScroll: true });
+      panel
+        .querySelector(
+          `[data-action="toggle-plan"][data-id="${CSS.escape(id)}"]`,
+        )
+        ?.focus({ preventScroll: true });
     } else if (a === 'chat-open') openChat(el.dataset.request || null);
     else if (a === 'chat-close') {
       state.chat.open = false;
@@ -1094,8 +1383,7 @@ export function createUi({ root, globe, config, room = null }) {
     } else if (a === 'request') {
       track('action', el.dataset.type);
       openRequest(el.dataset.type, { preset: el.dataset.preset || '' });
-    }
-    else if (a === 'request-cancel') {
+    } else if (a === 'request-cancel') {
       state.requestForm = null;
       renderTasks();
     } else if (a === 'guide') startGuide();
@@ -1119,7 +1407,13 @@ export function createUi({ root, globe, config, room = null }) {
       if (!body || state.chat.sending) return;
       state.chat.sending = true;
       try {
-        const msgs = await sendChat({ body, room: state.guest?.room || '', name: state.guest?.name || '', lang: getLang(), requestId: state.chat.requestId });
+        const msgs = await sendChat({
+          body,
+          room: state.guest?.room || '',
+          name: state.guest?.name || '',
+          lang: getLang(),
+          requestId: state.chat.requestId,
+        });
         ta.value = '';
         appendMessages(msgs);
         state.chat.requestId = null;
@@ -1142,11 +1436,23 @@ export function createUi({ root, globe, config, room = null }) {
       return;
     }
     const f = state.requestForm;
-    const detailParts = [f.preset, data.destination && `${t('destination')}: ${data.destination}`, data.people && `${t('people')}: ${data.people}`, data.details].filter(Boolean);
+    const detailParts = [
+      f.preset,
+      data.destination && `${t('destination')}: ${data.destination}`,
+      data.people && `${t('people')}: ${data.people}`,
+      data.details,
+    ].filter(Boolean);
     form.querySelector('[type="submit"]').disabled = true;
     msg.textContent = t('sending');
     try {
-      const saved = await submitRequest({ type: f.type, room: data.room, name: data.name, when: data.when, details: detailParts.join(' · '), lang: getLang() });
+      const saved = await submitRequest({
+        type: f.type,
+        room: data.room,
+        name: data.name,
+        when: data.when,
+        details: detailParts.join(' · '),
+        lang: getLang(),
+      });
       state.guest = { room: data.room.trim(), name: (data.name || '').trim() };
       saveObj('concierge.guest', state.guest);
       state.requests.unshift(saved);
@@ -1156,7 +1462,7 @@ export function createUi({ root, globe, config, room = null }) {
       renderTasks();
       const banner = document.createElement('div');
       banner.className = 'cg-toast';
-    banner.setAttribute('role', 'status');
+      banner.setAttribute('role', 'status');
       banner.textContent = t('requestSent');
       root.appendChild(banner);
       setTimeout(() => banner.remove(), 4000);
@@ -1179,7 +1485,8 @@ export function createUi({ root, globe, config, room = null }) {
     if (input) {
       const q = input.value;
       clearTimeout(state.searchTimer);
-      if (state.view.name !== 'search' || state.view.cat) go({ name: 'search', q }, { push: state.view.name !== 'search' });
+      if (state.view.name !== 'search' || state.view.cat)
+        go({ name: 'search', q }, { push: state.view.name !== 'search' });
       else state.view.q = q;
       if (!q.trim()) {
         state.searchResults = null;
@@ -1195,7 +1502,14 @@ export function createUi({ root, globe, config, room = null }) {
         state.searchResults = results;
         globe.removeMarkers('result');
         for (const r of results) {
-          if (r.kind === 'place') globe.addMarker({ id: r.id, lat: r.lat, lon: r.lon, label: r.name, kind: 'result' });
+          if (r.kind === 'place')
+            globe.addMarker({
+              id: r.id,
+              lat: r.lat,
+              lon: r.lon,
+              label: r.name,
+              kind: 'result',
+            });
         }
         renderResultsOnly();
       }, 350);
@@ -1207,9 +1521,11 @@ export function createUi({ root, globe, config, room = null }) {
       else state.done.delete(task.dataset.key);
       saveSet('concierge.done', state.done);
       // Mirror the same checkbox in the other panel without re-rendering the input in use.
-      root.querySelectorAll(`[data-role="task"][data-key="${task.dataset.key}"]`).forEach((c) => {
-        if (c !== task) c.checked = task.checked;
-      });
+      root
+        .querySelectorAll(`[data-role="task"][data-key="${task.dataset.key}"]`)
+        .forEach((c) => {
+          if (c !== task) c.checked = task.checked;
+        });
     }
   });
 
@@ -1284,7 +1600,9 @@ export function createUi({ root, globe, config, room = null }) {
       setSheet(SNAPS[(SNAPS.indexOf(state.sheet) + 1) % SNAPS.length]);
       return;
     }
-    const target = SNAPS.map((m) => [m, Math.abs(sheetOffsetFor(m) - y)]).sort((a, b) => a[1] - b[1])[0][0];
+    const target = SNAPS.map((m) => [m, Math.abs(sheetOffsetFor(m) - y)]).sort(
+      (a, b) => a[1] - b[1],
+    )[0][0];
     setSheet(target);
   }
   grip.addEventListener('pointerdown', onDown);

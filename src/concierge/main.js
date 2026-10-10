@@ -5,7 +5,10 @@ import { loadConfig, loadRoom, setContext } from './services.js';
 
 document.documentElement.lang = getLang();
 // Hide icon ligature words until the symbol font is in; show them even if it never loads (offline kiosk).
-document.fonts?.load('24px "Concierge Symbols"').then(() => document.body.classList.add('icons-ready')).catch(() => {});
+document.fonts
+  ?.load('24px "Concierge Symbols"')
+  .then(() => document.body.classList.add('icons-ready'))
+  .catch(() => {});
 setTimeout(() => document.body.classList.add('icons-ready'), 3000);
 const loader = document.getElementById('cg-loading');
 const status = loader.querySelector('.status');
@@ -16,7 +19,12 @@ async function start() {
   const slug = params.get('h') || 'default';
   const config = await loadConfig(slug);
   const HOTEL = config.hotel;
-  HOTEL.welcomeView = { height: 900, heading: 35, pitch: -38, ...(HOTEL.welcomeView || {}) };
+  HOTEL.welcomeView = {
+    height: 900,
+    heading: 35,
+    pitch: -38,
+    ...(HOTEL.welcomeView || {}),
+  };
   document.title = `${HOTEL.name} · Concierge`;
   loader.querySelector('.title').textContent = HOTEL.name;
   let room = null;
@@ -25,10 +33,16 @@ async function start() {
     const found = await loadRoom(slug, roomToken);
     if (found) {
       room = { ...found.room, stay: found.stay };
-      if (found.stay?.lang && !localStorage.getItem('concierge.lang')) setLang(found.stay.lang);
+      if (found.stay?.lang && !localStorage.getItem('concierge.lang'))
+        setLang(found.stay.lang);
     }
   }
-  setContext({ slug: HOTEL.slug, hotel: HOTEL, pois: config.pois, roomToken: room ? roomToken : '' });
+  setContext({
+    slug: HOTEL.slug,
+    hotel: HOTEL,
+    pois: config.pois,
+    roomToken: room ? roomToken : '',
+  });
   const globe = await createGlobe({
     container: 'cesiumContainer',
     googleApiKey: import.meta.env.GOOGLE_MAPS_API_KEY,

@@ -28,7 +28,12 @@ function sourceFiles(directory = SRC_ROOT) {
     const absolute = path.join(directory, entry.name);
     // The hotel concierge (guest app, backoffice) ships its own self-hosted icon
     // font (tools/icons/build-icons.py), so it is not part of the console subset.
-    if (entry.isDirectory() && ['concierge', 'backoffice', 'design'].includes(entry.name) && directory === SRC_ROOT) continue;
+    if (
+      entry.isDirectory() &&
+      ['concierge', 'backoffice', 'design'].includes(entry.name) &&
+      directory === SRC_ROOT
+    )
+      continue;
     if (entry.isDirectory()) files.push(...sourceFiles(absolute));
     else if (
       entry.isFile() &&

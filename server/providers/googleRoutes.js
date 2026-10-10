@@ -57,16 +57,21 @@ function finite(n) {
 /** Decode a Google encoded polyline into [[lon, lat], ...]. */
 export function decodePolyline(str = '') {
   const out = [];
-  let index = 0, lat = 0, lng = 0;
+  let index = 0,
+    lat = 0,
+    lng = 0;
   while (index < str.length) {
-    let b, shift = 0, result = 0;
+    let b,
+      shift = 0,
+      result = 0;
     do {
       b = str.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
       shift += 5;
     } while (b >= 0x20);
     lat += result & 1 ? ~(result >> 1) : result >> 1;
-    shift = 0; result = 0;
+    shift = 0;
+    result = 0;
     do {
       b = str.charCodeAt(index++) - 63;
       result |= (b & 0x1f) << shift;
@@ -89,7 +94,8 @@ export function shapeTransitRoutes(payload) {
   const routes = Array.isArray(payload?.routes) ? payload.routes : [];
   return routes.map((route) => {
     const legs = [];
-    let departure = null, arrival = null;
+    let departure = null,
+      arrival = null;
     for (const leg of route.legs ?? []) {
       for (const step of leg.steps ?? []) {
         const td = step.transitDetails;
@@ -148,8 +154,14 @@ async function computeTransit({ origin, destination, lang, key, fetchImpl }) {
         'X-Goog-FieldMask': FIELD_MASK,
       },
       body: JSON.stringify({
-        origin: { location: { latLng: { latitude: origin.lat, longitude: origin.lon } } },
-        destination: { location: { latLng: { latitude: destination.lat, longitude: destination.lon } } },
+        origin: {
+          location: { latLng: { latitude: origin.lat, longitude: origin.lon } },
+        },
+        destination: {
+          location: {
+            latLng: { latitude: destination.lat, longitude: destination.lon },
+          },
+        },
         travelMode: 'TRANSIT',
         computeAlternativeRoutes: true,
         languageCode: lang,
@@ -172,7 +184,9 @@ async function computeTransit({ origin, destination, lang, key, fetchImpl }) {
 }
 
 /** Vite plugin: same-origin transit routing for the concierge UI. */
-export function googleRoutesProxy({ fetchImpl = (...args) => fetch(...args) } = {}) {
+export function googleRoutesProxy({
+  fetchImpl = (...args) => fetch(...args),
+} = {}) {
   function install(middlewares) {
     middlewares.use('/api/google/routes', async (req, res) => {
       res.setHeader('Content-Type', 'application/json');
@@ -195,30 +209,60 @@ export function googleRoutesProxy({ fetchImpl = (...args) => fetch(...args) } = 
         return;
       }
       const { origin, destination } = body ?? {};
-      const lang = ['es', 'en', 'fr', 'de'].includes(body?.lang) ? body.lang : 'es';
+      const lang = ['es', 'en', 'fr', 'de'].includes(body?.lang)
+        ? body.lang
+        : 'es';
       if (
-        !finite(origin?.lat) || !finite(origin?.lon) ||
-        !finite(destination?.lat) || !finite(destination?.lon)
+        !finite(origin?.lat) ||
+        !finite(origin?.lon) ||
+        !finite(destination?.lat) ||
+        !finite(destination?.lon)
       ) {
         res.statusCode = 400;
-        res.end(JSON.stringify({ error: 'origin/destination {lat, lon} required' }));
+        res.end(
+          JSON.stringify({ error: 'origin/destination {lat, lon} required' }),
+        );
         return;
       }
-      const cacheKey = [origin.lat, origin.lon, destination.lat, destination.lon, lang]
+      const cacheKey = [
+        origin.lat,
+        origin.lon,
+        destination.lat,
+        destination.lon,
+        lang,
+      ]
         .map((v) => (typeof v === 'number' ? v.toFixed(5) : v))
         .join('|');
       const hit = cache.get(cacheKey);
       if (hit && Date.now() - hit.at < CACHE_TTL_MS) {
-        res.end(JSON.stringify({ configured: true, cached: true, routes: hit.routes }));
+        res.end(
+          JSON.stringify({
+            configured: true,
+            cached: true,
+            routes: hit.routes,
+          }),
+        );
         return;
       }
       try {
-        const routes = await computeTransit({ origin, destination, lang, key, fetchImpl });
+        const routes = await computeTransit({
+          origin,
+          destination,
+          lang,
+          key,
+          fetchImpl,
+        });
         cache.set(cacheKey, { at: Date.now(), routes });
         res.end(JSON.stringify({ configured: true, routes }));
       } catch (error) {
         res.statusCode = 502;
-        res.end(JSON.stringify({ configured: true, error: error?.message || 'Routes request failed', routes: [] }));
+        res.end(
+          JSON.stringify({
+            configured: true,
+            error: error?.message || 'Routes request failed',
+            routes: [],
+          }),
+        );
       }
     });
   }

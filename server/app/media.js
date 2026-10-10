@@ -19,13 +19,27 @@ export function createMedia({ dataDir }) {
   mkdirSync(root, { recursive: true });
 
   function save(hotelId, dataUrl) {
-    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
-    if (!m) throw Object.assign(new Error('JPEG, PNG or WebP image required'), { status: 400 });
+    const m = /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/.exec(
+      String(dataUrl || ''),
+    );
+    if (!m)
+      throw Object.assign(new Error('JPEG, PNG or WebP image required'), {
+        status: 400,
+      });
     const buf = Buffer.from(m[2], 'base64');
-    if (buf.length > MAX_BYTES) throw Object.assign(new Error('image too large (max 3 MB)'), { status: 413 });
+    if (buf.length > MAX_BYTES)
+      throw Object.assign(new Error('image too large (max 3 MB)'), {
+        status: 413,
+      });
     // Check magic bytes, not just the declared type.
-    const ok = (m[1] === 'image/jpeg' && buf[0] === 0xff && buf[1] === 0xd8) || (m[1] === 'image/png' && buf[0] === 0x89 && buf[1] === 0x50) || (m[1] === 'image/webp' && buf.slice(8, 12).toString() === 'WEBP');
-    if (!ok) throw Object.assign(new Error('file is not a valid image'), { status: 400 });
+    const ok =
+      (m[1] === 'image/jpeg' && buf[0] === 0xff && buf[1] === 0xd8) ||
+      (m[1] === 'image/png' && buf[0] === 0x89 && buf[1] === 0x50) ||
+      (m[1] === 'image/webp' && buf.slice(8, 12).toString() === 'WEBP');
+    if (!ok)
+      throw Object.assign(new Error('file is not a valid image'), {
+        status: 400,
+      });
     const dir = path.join(root, hotelId.replace(/[^A-Za-z0-9_-]/g, ''));
     mkdirSync(dir, { recursive: true });
     const name = `${randomBytes(8).toString('hex')}.${TYPES[m[1]]}`;
@@ -35,16 +49,26 @@ export function createMedia({ dataDir }) {
 
   function mount(app, { admin }) {
     // Auth first: anonymous clients never get a 5 MB body parsed.
-    app.post('/admin/upload', admin, express.json({ limit: '5mb' }), (req, res) => {
-      try {
-        res.status(201).json({ url: save(req.hotelId, req.body?.dataUrl) });
-      } catch (error) {
-        res.status(error.status || 500).json({ error: error.message });
-      }
-    });
+    app.post(
+      '/admin/upload',
+      admin,
+      express.json({ limit: '5mb' }),
+      (req, res) => {
+        try {
+          res.status(201).json({ url: save(req.hotelId, req.body?.dataUrl) });
+        } catch (error) {
+          res.status(error.status || 500).json({ error: error.message });
+        }
+      },
+    );
   }
 
   /** Static handler for the uploads folder (mounted at /uploads by the app). */
-  const serve = express.static(root, { maxAge: '30d', immutable: true, index: false, dotfiles: 'deny' });
+  const serve = express.static(root, {
+    maxAge: '30d',
+    immutable: true,
+    index: false,
+    dotfiles: 'deny',
+  });
   return { mount, serve, exists: (p) => existsSync(path.join(root, p)) };
 }

@@ -1,8 +1,44 @@
 /** Reception screen: live request inbox, assignment, notes, history, stays. */
-import { api, esc, icon, fmt, fmtLocal, TYPE_LABEL as BASE_LABEL, STATUS_LABEL, requireLogin, accountButton, bindAccount, confirmDialog, errorText, toast, beep, modal, setHotelOverride } from './common.js';
+import {
+  api,
+  esc,
+  icon,
+  fmt,
+  fmtLocal,
+  TYPE_LABEL as BASE_LABEL,
+  STATUS_LABEL,
+  requireLogin,
+  accountButton,
+  bindAccount,
+  confirmDialog,
+  errorText,
+  toast,
+  beep,
+  modal,
+  setHotelOverride,
+} from './common.js';
 
 const root = document.getElementById('app');
-const state = { user: null, hotel: null, hotels: [], tab: 'inbox', filter: 'open', q: '', requests: [], counts: {}, users: [], stays: [], known: null, expanded: new Set(), events: new Map(), chats: [], chatUnread: 0, chatKey: null, chat: null, chatLastSeen: null };
+const state = {
+  user: null,
+  hotel: null,
+  hotels: [],
+  tab: 'inbox',
+  filter: 'open',
+  q: '',
+  requests: [],
+  counts: {},
+  users: [],
+  stays: [],
+  known: null,
+  expanded: new Set(),
+  events: new Map(),
+  chats: [],
+  chatUnread: 0,
+  chatKey: null,
+  chat: null,
+  chatLastSeen: null,
+};
 
 const session = await requireLogin(root, 'Recepción');
 state.user = session.user;
@@ -23,8 +59,11 @@ let TYPE_LABEL = { ...BASE_LABEL };
 async function loadLabels() {
   TYPE_LABEL = { ...BASE_LABEL };
   try {
-    const { actions } = await api(`/h/${encodeURIComponent(state.hotel?.slug || 'default')}/config`);
-    for (const a of actions) TYPE_LABEL[a.key] = a.name?.es || a.name?.en || a.key;
+    const { actions } = await api(
+      `/h/${encodeURIComponent(state.hotel?.slug || 'default')}/config`,
+    );
+    for (const a of actions)
+      TYPE_LABEL[a.key] = a.name?.es || a.name?.en || a.key;
   } catch {}
 }
 await loadLabels();
@@ -73,8 +112,18 @@ function renderMain() {
   main.innerHTML = `
     <div class="toolbar">
       <div class="filters">
-        ${[['open', 'Abiertas'], ['pending', 'Pendientes'], ['confirmed', 'Confirmadas'], ['done', 'Hechas'], ['rejected', 'No disponibles'], ['all', 'Todas']]
-          .map(([k, l]) => `<button data-filter="${k}" class="${state.filter === k ? 'on' : ''}">${l}${state.counts[k] !== undefined && k !== 'open' && k !== 'all' ? ` <span class="pill">${state.counts[k]}</span>` : ''}</button>`)
+        ${[
+          ['open', 'Abiertas'],
+          ['pending', 'Pendientes'],
+          ['confirmed', 'Confirmadas'],
+          ['done', 'Hechas'],
+          ['rejected', 'No disponibles'],
+          ['all', 'Todas'],
+        ]
+          .map(
+            ([k, l]) =>
+              `<button data-filter="${k}" class="${state.filter === k ? 'on' : ''}">${l}${state.counts[k] !== undefined && k !== 'open' && k !== 'all' ? ` <span class="pill">${state.counts[k]}</span>` : ''}</button>`,
+          )
           .join('')}
       </div>
       <label class="search">${icon('search')}<input data-q placeholder="Habitación, nombre, texto…" value="${esc(state.q)}" /></label>
@@ -102,7 +151,8 @@ function renderMain() {
 function renderCards() {
   const box = document.querySelector('[data-cards]');
   if (!box) return;
-  document.querySelector('[data-pending]').textContent = state.counts.pending || '';
+  document.querySelector('[data-pending]').textContent =
+    state.counts.pending || '';
   if (!state.requests.length) {
     box.innerHTML = '<p class="muted">Sin solicitudes.</p>';
     return;
@@ -139,53 +189,76 @@ function renderCards() {
 
 function eventLabel(e) {
   if (e.event === 'created') return 'creó la solicitud';
-  if (e.event === 'status') return `cambió el estado a ${STATUS_LABEL[e.detail] || e.detail}`;
+  if (e.event === 'status')
+    return `cambió el estado a ${STATUS_LABEL[e.detail] || e.detail}`;
   if (e.event === 'note') return `nota al huésped: “${e.detail}”`;
-  if (e.event === 'assigned') return e.detail ? `asignó a ${e.detail}` : 'quitó la asignación';
+  if (e.event === 'assigned')
+    return e.detail ? `asignó a ${e.detail}` : 'quitó la asignación';
   if (e.event === 'comment') return `comentario interno: “${e.detail}”`;
   return e.event;
 }
 
-document.addEventListener('click', safe(async (e) => {
-  const toChat = e.target.closest('[data-chat]');
-  if (toChat) {
-    state.tab = 'chats';
-    state.chatKey = toChat.dataset.chat;
-    shell();
-    return refresh();
-  }
-  const card = e.target.closest('[data-id]');
-  if (!card) return;
-  const id = card.dataset.id;
-  const st = e.target.closest('[data-status]');
-  if (st) {
-    await api(`/staff/requests/${id}`, { method: 'PATCH', body: { status: st.dataset.status } });
-    toast(`Solicitud ${STATUS_LABEL[st.dataset.status].toLowerCase()}`);
-    return refresh();
-  }
-  if (e.target.closest('[data-note]')) {
-    const r = state.requests.find((x) => x.id === id);
-    const v = await modal({ title: `Nota para el huésped · hab. ${r.room}`, body: `<label>Texto que verá el huésped en su app<textarea name="note" rows="3">${esc(r.note || '')}</textarea></label><label>Comentario interno (no lo ve el huésped)<input name="comment" /></label>` });
-    if (!v) return;
-    await api(`/staff/requests/${id}`, { method: 'PATCH', body: { note: v.note, comment: v.comment || undefined } });
-    return refresh();
-  }
-  if (e.target.closest('[data-history]')) {
-    if (state.expanded.has(id)) state.expanded.delete(id);
-    else {
-      state.expanded.add(id);
-      state.events.set(id, (await api(`/staff/requests/${id}/events`)).events);
+document.addEventListener(
+  'click',
+  safe(async (e) => {
+    const toChat = e.target.closest('[data-chat]');
+    if (toChat) {
+      state.tab = 'chats';
+      state.chatKey = toChat.dataset.chat;
+      shell();
+      return refresh();
     }
-    renderCards();
-  }
-}));
-document.addEventListener('change', safe(async (e) => {
-  const sel = e.target.closest('[data-assign]');
-  if (!sel) return;
-  const id = sel.closest('[data-id]').dataset.id;
-  await api(`/staff/requests/${id}`, { method: 'PATCH', body: { assignedTo: sel.value || null } });
-  refresh();
-}));
+    const card = e.target.closest('[data-id]');
+    if (!card) return;
+    const id = card.dataset.id;
+    const st = e.target.closest('[data-status]');
+    if (st) {
+      await api(`/staff/requests/${id}`, {
+        method: 'PATCH',
+        body: { status: st.dataset.status },
+      });
+      toast(`Solicitud ${STATUS_LABEL[st.dataset.status].toLowerCase()}`);
+      return refresh();
+    }
+    if (e.target.closest('[data-note]')) {
+      const r = state.requests.find((x) => x.id === id);
+      const v = await modal({
+        title: `Nota para el huésped · hab. ${r.room}`,
+        body: `<label>Texto que verá el huésped en su app<textarea name="note" rows="3">${esc(r.note || '')}</textarea></label><label>Comentario interno (no lo ve el huésped)<input name="comment" /></label>`,
+      });
+      if (!v) return;
+      await api(`/staff/requests/${id}`, {
+        method: 'PATCH',
+        body: { note: v.note, comment: v.comment || undefined },
+      });
+      return refresh();
+    }
+    if (e.target.closest('[data-history]')) {
+      if (state.expanded.has(id)) state.expanded.delete(id);
+      else {
+        state.expanded.add(id);
+        state.events.set(
+          id,
+          (await api(`/staff/requests/${id}/events`)).events,
+        );
+      }
+      renderCards();
+    }
+  }),
+);
+document.addEventListener(
+  'change',
+  safe(async (e) => {
+    const sel = e.target.closest('[data-assign]');
+    if (!sel) return;
+    const id = sel.closest('[data-id]').dataset.id;
+    await api(`/staff/requests/${id}`, {
+      method: 'PATCH',
+      body: { assignedTo: sel.value || null },
+    });
+    refresh();
+  }),
+);
 
 /** Every action reports its failure instead of failing silently. */
 function safe(fn) {
@@ -213,27 +286,53 @@ async function refreshNow() {
   if (state.tab === 'chats') return refreshChat();
   try {
     const [{ requests, counts }, { users }] = await Promise.all([
-      api(`/staff/requests?status=${state.filter}&q=${encodeURIComponent(state.q)}`),
-      state.users.length ? Promise.resolve({ users: state.users }) : api('/staff/users'),
+      api(
+        `/staff/requests?status=${state.filter}&q=${encodeURIComponent(state.q)}`,
+      ),
+      state.users.length
+        ? Promise.resolve({ users: state.users })
+        : api('/staff/users'),
     ]);
-    if (seq !== refreshSeq || view !== `${state.tab}|${state.filter}|${state.q}`) return;
+    if (
+      seq !== refreshSeq ||
+      view !== `${state.tab}|${state.filter}|${state.q}`
+    )
+      return;
     state.users = users;
-    const pendingIds = new Set(requests.filter((r) => r.status === 'pending').map((r) => r.id));
+    const pendingIds = new Set(
+      requests.filter((r) => r.status === 'pending').map((r) => r.id),
+    );
     if (state.known) {
       const fresh = [...pendingIds].filter((x) => !state.known.has(x));
       if (fresh.length) {
         if (state.audio) beep();
-        toast(`${fresh.length} nueva${fresh.length > 1 ? 's' : ''} solicitud${fresh.length > 1 ? 'es' : ''}`, 'new');
+        toast(
+          `${fresh.length} nueva${fresh.length > 1 ? 's' : ''} solicitud${fresh.length > 1 ? 'es' : ''}`,
+          'new',
+        );
         document.title = `(${counts.pending || fresh.length}) Recepción`;
       }
     }
     state.known = pendingIds;
     state.requests = requests;
     state.counts = counts;
-    document.title = counts.pending ? `(${counts.pending}) Recepción` : 'Recepción';
-    await Promise.all([...state.expanded].map(async (id) => state.events.set(id, (await api(`/staff/requests/${id}/events`)).events)));
+    document.title = counts.pending
+      ? `(${counts.pending}) Recepción`
+      : 'Recepción';
+    await Promise.all(
+      [...state.expanded].map(async (id) =>
+        state.events.set(
+          id,
+          (await api(`/staff/requests/${id}/events`)).events,
+        ),
+      ),
+    );
     // Only repaint when something changed, and never under an open "Asignar a" menu.
-    const sig = JSON.stringify([requests, [...state.expanded], [...state.events]]);
+    const sig = JSON.stringify([
+      requests,
+      [...state.expanded],
+      [...state.events],
+    ]);
     const choosing = document.activeElement?.matches?.('.cards select');
     if (sig !== lastCardsSig && !choosing) {
       lastCardsSig = sig;
@@ -253,14 +352,20 @@ function renderStays(main) {
     <table class="table"><thead><tr><th>Hab.</th><th>Huésped</th><th>Pers.</th><th>Idioma</th><th>Entrada</th><th>Salida</th><th>Estado</th><th><span class="sr-only">Acciones</span></th></tr></thead>
     <tbody data-stays><tr><td colspan="8" class="muted">Cargando…</td></tr></tbody></table>`;
   main.querySelector('[data-checkin]').addEventListener('click', async () => {
-    const v = await modal({ title: 'Check-in', body: `
+    const v = await modal({
+      title: 'Check-in',
+      body: `
       <div class="row"><label>Habitación<input name="room" required /></label><label>Personas<input name="guests" type="number" min="1" value="2" /></label></div>
       <label>Nombre del huésped<input name="guestName" /></label>
       <div class="row"><label>Idioma<select name="lang"><option value="es">Español</option><option value="en">English</option><option value="fr">Français</option><option value="de">Deutsch</option></select></label><label>Salida<input name="checkout" type="date" /></label></div>
-      <label>Código de reserva (opcional)<input name="code" /></label>` });
+      <label>Código de reserva (opcional)<input name="code" /></label>`,
+    });
     if (!v) return;
     try {
-      await api('/staff/stays', { method: 'POST', body: { ...v, checkin: new Date().toISOString().slice(0, 10) } });
+      await api('/staff/stays', {
+        method: 'POST',
+        body: { ...v, checkin: new Date().toISOString().slice(0, 10) },
+      });
       toast('Check-in registrado');
       refreshStays();
     } catch (err) {
@@ -277,7 +382,9 @@ async function refreshStays() {
   body.innerHTML = stays.length
     ? stays
         .map(
-          (s) => `<tr class="${s.status}"><td><b>${esc(s.room || '—')}</b></td><td>${esc(s.guestName)}</td><td>${Number(s.guests) || 1}</td><td>${esc(s.lang.toUpperCase())}</td><td>${esc(s.checkin || '')}</td><td>${esc(s.checkout || '')}</td>
+          (
+            s,
+          ) => `<tr class="${s.status}"><td><b>${esc(s.room || '—')}</b></td><td>${esc(s.guestName)}</td><td>${Number(s.guests) || 1}</td><td>${esc(s.lang.toUpperCase())}</td><td>${esc(s.checkin || '')}</td><td>${esc(s.checkout || '')}</td>
             <td><span class="badge ${s.status === 'active' ? 'confirmed' : 'done'}">${s.status === 'active' ? 'Activa' : s.status === 'closed' ? 'Cerrada' : 'Próxima'}</span></td>
             <td class="right">${s.status === 'active' ? `<button class="btn sm" data-checkout="${s.id}">${icon('logout')} Check-out</button>` : ''}
               ${s.roomToken ? `<a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel.slug)}&r=${encodeURIComponent(s.roomToken)}">${icon('qr_code')} App</a>` : ''}</td></tr>`,
@@ -286,16 +393,19 @@ async function refreshStays() {
     : '<tr><td colspan="8" class="muted">Sin estancias.</td></tr>';
   body.querySelectorAll('[data-checkout]').forEach((b) =>
     b.addEventListener('click', async () => {
-      await api(`/staff/stays/${b.dataset.checkout}`, { method: 'PATCH', body: { status: 'closed' } });
+      await api(`/staff/stays/${b.dataset.checkout}`, {
+        method: 'PATCH',
+        body: { status: 'closed' },
+      });
       toast('Check-out hecho');
       refreshStays();
     }),
   );
 }
 
-
 // ---------- chats ----------
-const who = (c) => `Hab. ${c.room || '—'}${c.guestName ? ` · ${c.guestName}` : ''}`;
+const who = (c) =>
+  `Hab. ${c.room || '—'}${c.guestName ? ` · ${c.guestName}` : ''}`;
 function sysLabel(body) {
   if (body === 'created') return 'Nueva solicitud';
   if (body === 'blocked') return 'Dispositivo bloqueado por recepción';
@@ -306,8 +416,17 @@ async function refreshChatList() {
   try {
     const { chats, unread } = await api('/staff/chats');
     const newest = chats.find((c) => c.unread && c.lastAuthor === 'guest');
-    const sig = chats.filter((c) => c.unread).map((c) => `${c.key}:${c.unread}`).join('|');
-    if (state.chatLastSeen !== null && sig && sig !== state.chatLastSeen && newest && newest.key !== state.chatKey) {
+    const sig = chats
+      .filter((c) => c.unread)
+      .map((c) => `${c.key}:${c.unread}`)
+      .join('|');
+    if (
+      state.chatLastSeen !== null &&
+      sig &&
+      sig !== state.chatLastSeen &&
+      newest &&
+      newest.key !== state.chatKey
+    ) {
       if (state.audio) beep();
       toast(`Mensaje de ${who(newest)}`, 'new');
     }
@@ -331,7 +450,9 @@ function paintChatList() {
   box.innerHTML = state.chats.length
     ? state.chats
         .map(
-          (c) => `<button class="chat-item ${c.key === state.chatKey ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-open-chat="${esc(c.key)}">
+          (
+            c,
+          ) => `<button class="chat-item ${c.key === state.chatKey ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-open-chat="${esc(c.key)}">
             <div class="chat-item-top"><b>${esc(who(c))}</b><span class="muted">${esc(fmt(c.lastAt))}</span></div>
             <div class="chat-item-last">${c.lastAuthor === 'system' ? esc(sysLabel(c.lastBody || '')) : `${c.lastAuthor === 'staff' ? 'Tú: ' : ''}${esc(c.lastBody || '')}`}</div>
             ${c.unread ? `<span class="pill">${c.unread}</span>` : ''}
@@ -348,7 +469,10 @@ async function refreshChat() {
   if (!pane) return;
   try {
     const data = await api(`/staff/chats/${encodeURIComponent(state.chatKey)}`);
-    const sameCount = state.chat && state.chat.key === data.chat.key && state.chat.messages.length === data.messages.length;
+    const sameCount =
+      state.chat &&
+      state.chat.key === data.chat.key &&
+      state.chat.messages.length === data.messages.length;
     state.chat = { key: data.chat.key, ...data };
     if (sameCount && pane.querySelector('[data-chat-form]')) return; // nothing new: keep the draft untouched
     const draft = pane.querySelector('[data-chat-form] textarea')?.value || '';
@@ -362,16 +486,24 @@ async function refreshChat() {
             const time = fmt(m.at);
             const req = data.requests.find((r) => r.id === m.requestId);
             const reqLabel = req ? `${TYPE_LABEL[req.type] || req.type}` : '';
-            if (m.author === 'system') return `<div class="msg sys">${icon('info', 'sm')} ${esc(sysLabel(m.body))}${reqLabel ? ` · <b>${esc(reqLabel)}</b>` : ''} <span>${esc(time)}</span></div>`;
+            if (m.author === 'system')
+              return `<div class="msg sys">${icon('info', 'sm')} ${esc(sysLabel(m.body))}${reqLabel ? ` · <b>${esc(reqLabel)}</b>` : ''} <span>${esc(time)}</span></div>`;
             return `<div class="msg ${m.author === 'staff' ? 'mine' : 'theirs'}">
               ${m.author === 'staff' ? `<div class="who">${esc(m.staffName || 'Recepción')}</div>` : ''}
               ${reqLabel ? `<div class="ref">${icon('reply', 'sm')} ${esc(reqLabel)}</div>` : ''}
               <div class="body">${esc(m.body)}</div><div class="time">${esc(time)}</div></div>`;
           })
           .join('')}</div>
-        <aside class="chat-reqs"><h4>Solicitudes de este huésped</h4>${data.requests.length
-          ? data.requests.map((r) => `<div class="mini-req ${r.status}"><b>${esc(TYPE_LABEL[r.type] || r.type)}</b><span class="badge ${r.status}">${esc(STATUS_LABEL[r.status])}</span>${r.when ? `<div class="muted">${esc(fmtLocal(r.when))}</div>` : ''}</div>`).join('')
-          : '<p class="muted">Ninguna.</p>'}</aside>
+        <aside class="chat-reqs"><h4>Solicitudes de este huésped</h4>${
+          data.requests.length
+            ? data.requests
+                .map(
+                  (r) =>
+                    `<div class="mini-req ${r.status}"><b>${esc(TYPE_LABEL[r.type] || r.type)}</b><span class="badge ${r.status}">${esc(STATUS_LABEL[r.status])}</span>${r.when ? `<div class="muted">${esc(fmtLocal(r.when))}</div>` : ''}</div>`,
+                )
+                .join('')
+            : '<p class="muted">Ninguna.</p>'
+        }</aside>
       </div>
       <form class="chat-form" data-chat-form>
         <select class="sel" aria-label="Asunto del mensaje">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
@@ -384,22 +516,35 @@ async function refreshChat() {
     if (err.status === 404) state.chatKey = null;
   }
 }
-document.addEventListener('click', safe(async (e) => {
-  const blk = e.target.closest('[data-block]');
-  if (!blk || !state.chatKey) return;
-  const block = blk.dataset.block === '1';
-  if (block && !(await confirmDialog('Este dispositivo no podrá enviar mensajes ni solicitudes hasta que lo desbloquees.', 'Bloquear'))) return;
-  try {
-    await api(`/staff/chats/${encodeURIComponent(state.chatKey)}/block`, { method: 'POST', body: { blocked: block } });
-    toast(block ? 'Dispositivo bloqueado' : 'Dispositivo desbloqueado');
-    state.chat = null;
-    await refreshChat();
-    await refreshChatList();
-    paintChatList();
-  } catch (err) {
-    toast(errorText(err), 'err');
-  }
-}));
+document.addEventListener(
+  'click',
+  safe(async (e) => {
+    const blk = e.target.closest('[data-block]');
+    if (!blk || !state.chatKey) return;
+    const block = blk.dataset.block === '1';
+    if (
+      block &&
+      !(await confirmDialog(
+        'Este dispositivo no podrá enviar mensajes ni solicitudes hasta que lo desbloquees.',
+        'Bloquear',
+      ))
+    )
+      return;
+    try {
+      await api(`/staff/chats/${encodeURIComponent(state.chatKey)}/block`, {
+        method: 'POST',
+        body: { blocked: block },
+      });
+      toast(block ? 'Dispositivo bloqueado' : 'Dispositivo desbloqueado');
+      state.chat = null;
+      await refreshChat();
+      await refreshChatList();
+      paintChatList();
+    } catch (err) {
+      toast(errorText(err), 'err');
+    }
+  }),
+);
 document.addEventListener('click', (e) => {
   const b = e.target.closest('[data-open-chat]');
   if (!b) return;
@@ -416,7 +561,10 @@ document.addEventListener('submit', async (e) => {
   if (!body) return;
   const requestId = form.querySelector('select').value || undefined;
   try {
-    await api(`/staff/chats/${encodeURIComponent(state.chatKey)}`, { method: 'POST', body: { body, requestId } });
+    await api(`/staff/chats/${encodeURIComponent(state.chatKey)}`, {
+      method: 'POST',
+      body: { body, requestId },
+    });
     ta.value = '';
     state.chat = null;
     await refreshChat();

@@ -6,7 +6,11 @@
  */
 import { checkWebhookUrl } from './security.js';
 
-export function createNotifier({ fetchImpl = (...a) => fetch(...a), env = process.env, mailer: injected } = {}) {
+export function createNotifier({
+  fetchImpl = (...a) => fetch(...a),
+  env = process.env,
+  mailer: injected,
+} = {}) {
   let mailer = injected ?? null;
   const production = env.NODE_ENV === 'production';
   async function getMailer() {
@@ -26,9 +30,16 @@ export function createNotifier({ fetchImpl = (...a) => fetch(...a), env = proces
     try {
       if (!trusted) {
         const check = await checkWebhookUrl(url, { production });
-        if (!check.ok) return console.warn('[concierge] webhook refused:', check.error);
+        if (!check.ok)
+          return console.warn('[concierge] webhook refused:', check.error);
       }
-      await fetchImpl(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), redirect: 'error', signal: AbortSignal.timeout(8000) });
+      await fetchImpl(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        redirect: 'error',
+        signal: AbortSignal.timeout(8000),
+      });
     } catch (error) {
       console.warn('[concierge] webhook failed:', error?.message || error);
     }
@@ -37,20 +48,45 @@ export function createNotifier({ fetchImpl = (...a) => fetch(...a), env = proces
   function mail({ to, subject, text }) {
     return getMailer().then((m) => {
       if (!m) return false;
-      return m.sendMail({ from: env.SMTP_FROM || 'concierge@hotel.local', to, subject, text }).then(
-        () => true,
-        (e) => (console.warn('[concierge] mail failed:', e?.message), false),
-      );
+      return m
+        .sendMail({
+          from: env.SMTP_FROM || 'concierge@hotel.local',
+          to,
+          subject,
+          text,
+        })
+        .then(
+          () => true,
+          (e) => (console.warn('[concierge] mail failed:', e?.message), false),
+        );
     });
   }
 
-  const TYPE_LABEL = { spa: 'Spa / masaje', table: 'Mesa', breakfast: 'Desayuno', taxi: 'Taxi', latecheckout: 'Late check-out', housekeeping: 'Limpieza', parking: 'Parking', flamenco: 'Flamenco', tickets: 'Entradas', reception: 'Recepción', wakeup: 'Despertador', other: 'Otro' };
+  const TYPE_LABEL = {
+    spa: 'Spa / masaje',
+    table: 'Mesa',
+    breakfast: 'Desayuno',
+    taxi: 'Taxi',
+    latecheckout: 'Late check-out',
+    housekeeping: 'Limpieza',
+    parking: 'Parking',
+    flamenco: 'Flamenco',
+    tickets: 'Entradas',
+    reception: 'Recepción',
+    wakeup: 'Despertador',
+    other: 'Otro',
+  };
 
   function send({ event, hotel, hotelRow, request }) {
-    const payload = { event, hotel: { id: hotel.id, slug: hotel.slug, name: hotel.name }, request };
+    const payload = {
+      event,
+      hotel: { id: hotel.id, slug: hotel.slug, name: hotel.name },
+      request,
+    };
     if (hotelRow?.webhook_url) post(hotelRow.webhook_url, payload);
     // The global webhook is set by the operator in .env, so it is trusted (may be on the LAN).
-    if (env.CONCIERGE_WEBHOOK_URL) post(env.CONCIERGE_WEBHOOK_URL, payload, { trusted: true });
+    if (env.CONCIERGE_WEBHOOK_URL)
+      post(env.CONCIERGE_WEBHOOK_URL, payload, { trusted: true });
     if (event === 'created' && hotelRow?.notify_email && canMail()) {
       mail({
         to: hotelRow.notify_email,

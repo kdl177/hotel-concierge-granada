@@ -15,7 +15,12 @@ export default defineConfig(({ command, mode }) => {
     if (process.env[key] === undefined) process.env[key] = value;
   }
   const config = createBrowserViteConfig({
-    plugins: [...localProviderPlugins(), googleRoutesProxy(), conciergeApiPlugin(), apiNotFoundPlugin()],
+    plugins: [
+      ...localProviderPlugins(),
+      googleRoutesProxy(),
+      conciergeApiPlugin(),
+      apiNotFoundPlugin(),
+    ],
     googleApiKey: process.env.GOOGLE_MAPS_API_KEY,
     cesiumToken: process.env.CESIUM_ION_TOKEN,
     host: process.env.HOST,
@@ -28,14 +33,25 @@ export default defineConfig(({ command, mode }) => {
     rollupOptions: {
       input: {
         index: fileURLToPath(new URL('../../index.html', import.meta.url)),
-        reception: fileURLToPath(new URL('../../reception.html', import.meta.url)),
+        reception: fileURLToPath(
+          new URL('../../reception.html', import.meta.url),
+        ),
         admin: fileURLToPath(new URL('../../admin.html', import.meta.url)),
         // The God's Eye View console is kept in the repo and in `npm run dev`;
         // it is only bundled for production when CONCIERGE_CONSOLE=1.
-        ...(process.env.CONCIERGE_CONSOLE === '1' ? { console: fileURLToPath(new URL('../../console.html', import.meta.url)) } : {}),
+        ...(process.env.CONCIERGE_CONSOLE === '1'
+          ? {
+              console: fileURLToPath(
+                new URL('../../console.html', import.meta.url),
+              ),
+            }
+          : {}),
       },
     },
   };
-  config.preview = { host: process.env.HOST || 'localhost', port: parseInt(process.env.PORT, 10) || 4180 };
+  config.preview = {
+    host: process.env.HOST || 'localhost',
+    port: parseInt(process.env.PORT, 10) || 4180,
+  };
   return config;
 });

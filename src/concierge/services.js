@@ -2,14 +2,20 @@
 import { L } from './i18n.js';
 
 /** Live hotel config (set by main.js after loading /api/h/:slug/config). */
-export const CTX = { slug: 'default', hotel: { lat: 0, lon: 0 }, pois: [], roomToken: '' };
+export const CTX = {
+  slug: 'default',
+  hotel: { lat: 0, lon: 0 },
+  pois: [],
+  roomToken: '',
+};
 export function setContext(next) {
   Object.assign(CTX, next);
 }
 const HOTEL = new Proxy({}, { get: (_, k) => CTX.hotel[k] });
 
 /** ~15 km box around the hotel, so search works for any hotel's city. */
-const hotelBounds = () => `${(HOTEL.lat - 0.13).toFixed(3)},${(HOTEL.lon - 0.16).toFixed(3)}|${(HOTEL.lat + 0.13).toFixed(3)},${(HOTEL.lon + 0.16).toFixed(3)}`;
+const hotelBounds = () =>
+  `${(HOTEL.lat - 0.13).toFixed(3)},${(HOTEL.lon - 0.16).toFixed(3)}|${(HOTEL.lat + 0.13).toFixed(3)},${(HOTEL.lon + 0.16).toFixed(3)}`;
 const city = () => (HOTEL.city ? ` ${HOTEL.city}` : '');
 
 function haversineM(a, b) {
@@ -18,7 +24,9 @@ function haversineM(a, b) {
   const dLon = ((b.lon - a.lon) * Math.PI) / 180;
   const s =
     Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) * Math.cos((b.lat * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+    Math.cos((a.lat * Math.PI) / 180) *
+      Math.cos((b.lat * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
@@ -43,7 +51,12 @@ export async function fetchTransit(from, to, lang, { signal, destName } = {}) {
   const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/transit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ origin: { lat: from.lat, lon: from.lon }, destination: { lat: to.lat, lon: to.lon }, destName, lang }),
+    body: JSON.stringify({
+      origin: { lat: from.lat, lon: from.lon },
+      destination: { lat: to.lat, lon: to.lon },
+      destName,
+      lang,
+    }),
     signal,
   });
   const data = await res.json().catch(() => ({}));
@@ -70,12 +83,14 @@ function normalize(s) {
 export async function searchPlaces(query, { signal } = {}) {
   const q = normalize(query.trim());
   if (!q) return [];
-  const local = CTX.pois.filter((p) => {
-    const hay = normalize(
-      [L(p.name), p.name.es, p.name.en, L(p.tag), L(p.desc)].join(' '),
-    );
-    return hay.includes(q);
-  }).map((p) => ({ kind: 'poi', id: p.id, poi: p }));
+  const local = CTX.pois
+    .filter((p) => {
+      const hay = normalize(
+        [L(p.name), p.name.es, p.name.en, L(p.tag), L(p.desc)].join(' '),
+      );
+      return hay.includes(q);
+    })
+    .map((p) => ({ kind: 'poi', id: p.id, poi: p }));
   if (local.length >= 3) return local;
 
   const results = [...local];
@@ -110,7 +125,9 @@ export async function searchPlaces(query, { signal } = {}) {
       results.push({
         kind: 'place',
         id: `osm:${loc.lat},${loc.lng}`,
-        name: r.address_components?.[0]?.long_name || r.formatted_address.split(',')[0],
+        name:
+          r.address_components?.[0]?.long_name ||
+          r.formatted_address.split(',')[0],
         address: r.formatted_address,
         lat: loc.lat,
         lon: loc.lng,
@@ -123,7 +140,8 @@ export async function searchPlaces(query, { signal } = {}) {
 function dedupe(list) {
   const seen = new Set();
   return list.filter((r) => {
-    const key = r.kind === 'poi' ? r.id : `${r.lat.toFixed(4)},${r.lon.toFixed(4)}`;
+    const key =
+      r.kind === 'poi' ? r.id : `${r.lat.toFixed(4)},${r.lon.toFixed(4)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -149,12 +167,15 @@ export function isOpenNow(service, date = new Date()) {
     return h * 60 + m;
   };
   return service.open.some(
-    (slot) => slot.days.includes(day) && now >= mins(slot.from) && now <= mins(slot.to),
+    (slot) =>
+      slot.days.includes(day) && now >= mins(slot.from) && now <= mins(slot.to),
   );
 }
 
 export function formatDistance(m, t) {
-  return m >= 1000 ? `${(m / 1000).toFixed(1)} ${t('km')}` : `${Math.round(m)} ${t('m')}`;
+  return m >= 1000
+    ? `${(m / 1000).toFixed(1)} ${t('km')}`
+    : `${Math.round(m)} ${t('m')}`;
 }
 
 export function formatDuration(s, t) {
@@ -166,7 +187,10 @@ export function formatDuration(s, t) {
 export function formatTime(iso, lang) {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' });
+    return new Date(iso).toLocaleTimeString(lang, {
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   } catch {
     return '';
   }
@@ -177,31 +201,42 @@ export async function submitRequest(payload) {
   const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ...payload, roomToken: CTX.roomToken || undefined, guestKey: guestKey() }),
+    body: JSON.stringify({
+      ...payload,
+      roomToken: CTX.roomToken || undefined,
+      guestKey: guestKey(),
+    }),
   });
   const data = await res.json();
-  if (!res.ok || !data?.request) throw new Error(data?.error || 'request failed');
+  if (!res.ok || !data?.request)
+    throw new Error(data?.error || 'request failed');
   return data.request;
 }
 
 /** Current status of the guest's own requests. */
 export async function fetchRequests(ids) {
   if (!ids.length) return [];
-  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/requests?ids=${encodeURIComponent(ids.join(','))}&key=${guestKey()}`);
+  const res = await fetch(
+    `/api/h/${encodeURIComponent(CTX.slug)}/requests?ids=${encodeURIComponent(ids.join(','))}&key=${guestKey()}`,
+  );
   const data = await res.json();
   return data?.requests ?? [];
 }
 
 /** Load the hotel configuration for a slug ("default" = first hotel). */
 export async function loadConfig(slug) {
-  const res = await fetch(`/api/h/${encodeURIComponent(slug || 'default')}/config`);
+  const res = await fetch(
+    `/api/h/${encodeURIComponent(slug || 'default')}/config`,
+  );
   if (!res.ok) throw new Error(`config ${res.status}`);
   return res.json();
 }
 
 /** Identify a room from its QR token. */
 export async function loadRoom(slug, token) {
-  const res = await fetch(`/api/h/${encodeURIComponent(slug || 'default')}/room/${encodeURIComponent(token)}`);
+  const res = await fetch(
+    `/api/h/${encodeURIComponent(slug || 'default')}/room/${encodeURIComponent(token)}`,
+  );
   return res.ok ? res.json() : null;
 }
 
@@ -218,22 +253,33 @@ export function guestKey() {
       const legacy = localStorage.getItem('concierge.guestKey');
       if (legacy && !localStorage.getItem('concierge.guestKey.claimed')) {
         k = legacy;
-        localStorage.setItem('concierge.guestKey.claimed', CTX.slug || 'default');
+        localStorage.setItem(
+          'concierge.guestKey.claimed',
+          CTX.slug || 'default',
+        );
       }
     }
     if (!k || !/^[A-Za-z0-9_-]{16,64}$/.test(k)) {
-      k = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`).replace(/[^A-Za-z0-9]/g, '').slice(0, 32).padEnd(20, '0');
+      k = (crypto.randomUUID?.() || `${Date.now()}${Math.random()}`)
+        .replace(/[^A-Za-z0-9]/g, '')
+        .slice(0, 32)
+        .padEnd(20, '0');
     }
     localStorage.setItem(name, k);
     return k;
   } catch {
-    CTX._key ||= `k${Date.now()}${Math.floor(Math.random() * 1e9)}`.padEnd(20, '0');
+    CTX._key ||= `k${Date.now()}${Math.floor(Math.random() * 1e9)}`.padEnd(
+      20,
+      '0',
+    );
     return CTX._key;
   }
 }
 
 export async function fetchChat(after = 0, markRead = false) {
-  const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/chat?key=${guestKey()}&after=${after}${markRead ? '&read=1' : ''}`);
+  const res = await fetch(
+    `/api/h/${encodeURIComponent(CTX.slug)}/chat?key=${guestKey()}&after=${after}${markRead ? '&read=1' : ''}`,
+  );
   if (!res.ok) throw new Error(`chat ${res.status}`);
   return res.json(); // { messages, unread }
 }
@@ -242,7 +288,14 @@ export async function sendChat({ body, room, name, lang, requestId }) {
   const res = await fetch(`/api/h/${encodeURIComponent(CTX.slug)}/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ key: guestKey(), body, room, name, lang, requestId }),
+    body: JSON.stringify({
+      key: guestKey(),
+      body,
+      room,
+      name,
+      lang,
+      requestId,
+    }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || `chat ${res.status}`);
@@ -265,10 +318,24 @@ export function track(kind, ref = '') {
 }
 function flush() {
   if (!queue.length || !CTX.slug) return;
-  const body = JSON.stringify({ lang: document.documentElement.lang, events: queue.splice(0, 50) });
+  const body = JSON.stringify({
+    lang: document.documentElement.lang,
+    events: queue.splice(0, 50),
+  });
   const url = `/api/h/${encodeURIComponent(CTX.slug)}/events`;
-  if (!(navigator.sendBeacon && navigator.sendBeacon(url, new Blob([body], { type: 'application/json' })))) {
-    fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+  if (!(
+    navigator.sendBeacon &&
+    navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }))
+  )) {
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => {});
   }
 }
-addEventListener('visibilitychange', () => document.visibilityState === 'hidden' && flush());
+addEventListener(
+  'visibilitychange',
+  () => document.visibilityState === 'hidden' && flush(),
+);
