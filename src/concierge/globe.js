@@ -9,10 +9,10 @@ import { createApplicationViewer } from '../app/viewer.js';
 import { loadPhotorealisticTileset } from '../maps/google3d.js';
 
 const MARKER_COLORS = {
-  hotel: '#f5b642',
-  poi: '#ffffff',
-  result: '#7dd3fc',
-  selected: '#ff5c7a',
+  hotel: '#e4b04f',
+  poi: '#f5efe4',
+  result: '#9ec5ea',
+  selected: '#b4472a',
   stop: '#ff9f43',
 };
 

@@ -264,17 +264,22 @@ export function createUi({ root, globe, config, room = null }) {
       );
     return out.length ? `<div class="cg-seals">${out.join('')}</div>` : '';
   }
-  function poiCard(p, { wide = false, badges = false } = {}) {
+  function poiCard(p, { wide = false, badges = false, index = null } = {}) {
     const cat = POI_CATEGORIES[p.cat] || { icon: 'place' };
     const d = distanceFromHotelM(p);
+    const num =
+      index !== null
+        ? `<span class="cg-num">${String(index + 1).padStart(2, '0')}</span>`
+        : '';
     return `<button class="cg-card ${wide ? 'wide' : ''} ${p.photo ? 'has-photo' : ''}" data-action="open-poi" data-id="${esc(p.id)}">
-      ${p.photo ? `<img class="cg-card-photo" src="${esc(p.photo)}" alt="" loading="lazy" />` : `<div class="cg-card-icon">${icon(cat?.icon || 'place')}</div>`}
+      ${p.photo ? `<img class="cg-card-photo" src="${esc(p.photo)}" alt="" loading="lazy" />` : num || `<div class="cg-card-icon">${icon(cat?.icon || 'place')}</div>`}
       <div class="cg-card-body">
+        <div class="cg-card-kicker">${esc(L(p.tag))}</div>
         <div class="cg-card-title">${esc(L(p.name))}</div>
-        <div class="cg-card-meta"><span class="cg-tag">${esc(L(p.tag))}</span> · ${esc(formatDistance(d, t))} · ${esc(formatDuration(p.minutes * 60, t))}</div>
+        <div class="cg-card-meta"><span>${esc(formatDistance(d, t))}</span><span>${esc(formatDuration(p.minutes * 60, t))}</span></div>
         ${badges ? poiBadges(p) : ''}
       </div>
-      ${state.plan.has(p.id) ? icon('bookmark', 'cg-plan-ico') : ''}${icon('chevron_right', 'cg-chev')}
+      ${state.plan.has(p.id) ? icon('bookmark', 'cg-plan-ico') : ''}${icon('arrow_forward', 'cg-chev')}
     </button>`;
   }
 
@@ -372,7 +377,7 @@ export function createUi({ root, globe, config, room = null }) {
       ${searchBox()}
       ${state.quickCats.length ? `<div class="cg-quick">${quickSearch(6)}</div>` : ''}
       <h2 class="cg-sec">${esc(t('suggestions'))} <span class="cg-moment">· ${esc(t(moment))}</span></h2>
-      <div class="cg-row">${suggested.map((p) => poiCard(p)).join('')}</div>
+      <div class="cg-row">${suggested.map((p, i) => poiCard(p, { index: i })).join('')}</div>
       <h2 class="cg-sec">${esc(t('hotel'))} ${openNow.length ? `<span class="cg-moment">· ${esc(t('openNow'))}</span>` : ''}</h2>
       <div class="cg-chips">
         ${openNow.map((s) => `<button class="cg-chip" data-action="open-service" data-id="${esc(s.id)}">${icon(s.icon)} ${esc(L(s.name))}</button>`).join('')}

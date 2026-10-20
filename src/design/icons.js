@@ -9,6 +9,7 @@ export const ICONS = {
   apartment: 59968,
   apps: 58819,
   arrow_back: 58820,
+  arrow_forward: 58824,
   atm: 58739,
   attractions: 59986,
   baby_changing_station: 61851,
