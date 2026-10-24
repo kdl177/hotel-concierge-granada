@@ -914,6 +914,8 @@ export function createApi({
         actions_json: J(poiActions(b.actions)),
         active: b.active === undefined ? 1 : bool(b.active),
         photo: safeUrl(b.photo, { allowPath: true }),
+        photo_credit: clean(b.photoCredit, 160),
+        photo_credit_url: safeUrl(b.photoCreditUrl),
         indoor: bool(b.indoor),
       }),
       required: (c) =>

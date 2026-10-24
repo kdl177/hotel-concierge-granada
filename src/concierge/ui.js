@@ -534,7 +534,7 @@ export function createUi({ root, globe, config, room = null }) {
     const inPlan = v.poi && state.plan.has(v.poi.id);
     return `
       ${header(p.title, v.poi ? L(v.poi.tag) : v.place.address || '', v.poi ? `<button class="cg-plan-btn ${inPlan ? 'on' : ''}" data-action="toggle-plan" data-id="${esc(v.poi.id)}" title="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}" aria-label="${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}" aria-pressed="${inPlan}">${icon(inPlan ? 'bookmark' : 'bookmark_add')}</button>` : '')}
-      ${v.poi?.photo ? `<img class="cg-hero-photo" src="${esc(v.poi.photo)}" alt="${esc(p.title)}" />` : ''}
+      ${v.poi?.photo ? `<figure class="cg-hero-fig"><img class="cg-hero-photo" src="${esc(v.poi.photo)}" alt="${esc(p.title)}" width="800" height="500" />${v.poi.photoCredit ? `<figcaption class="cg-credit">${/^https?:\/\//.test(v.poi.photoCreditUrl || '') ? `<a href="${esc(v.poi.photoCreditUrl)}" target="_blank" rel="noopener noreferrer">${esc(v.poi.photoCredit)}</a>` : esc(v.poi.photoCredit)}</figcaption>` : ''}</figure>` : ''}
       ${v.poi ? `<p class="cg-desc">${esc(L(v.poi.desc))}</p>` : ''}
       <div class="cg-facts">
         ${v.place?.hours ? `<span>${icon('schedule')} <b>${esc(v.place.hours)}</b></span>` : ''}

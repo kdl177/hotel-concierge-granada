@@ -436,3 +436,8 @@ h3::after, .cg-sec::after { content: ''; flex: 1; height: 1px; background: var(-
 /* Headings receive programmatic focus after navigation: no ring there */
 h1[tabindex="-1"]:focus, h2[tabindex="-1"]:focus, h1[tabindex="-1"]:focus-visible, h2[tabindex="-1"]:focus-visible { box-shadow: none; outline: none; }
 .cg-act span { text-align: left; }
+/* Place photo with its licence credit */
+.cg-hero-fig { margin: 6px 0 12px; }
+.cg-hero-fig .cg-hero-photo { margin: 0; aspect-ratio: 8 / 5; max-height: none; }
+.cg-credit { margin: 4px 2px 0; font-size: 10.5px; color: var(--ink-3); text-align: right; letter-spacing: .02em; }
+.cg-credit a { color: inherit; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: var(--hair-2); }

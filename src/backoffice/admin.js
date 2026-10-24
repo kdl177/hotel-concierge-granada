@@ -410,6 +410,8 @@ async function editService(s) {
     bookable: !!u.bookable,
     active: !!u.active,
     photo: u.photo || '',
+    photoCredit: u.photoCredit || '',
+    photoCreditUrl: u.photoCreditUrl || '',
   });
 }
 
@@ -501,7 +503,7 @@ async function editPoi(p) {
     title: p ? 'Editar lugar' : 'Nuevo lugar',
     body: `<div class="row"><label>Categoría${select('cat', CATS, p?.cat || 'monument')}</label><label>Prioridad (0–10)<input name="priority" type="number" value="${p?.priority ?? 5}" /></label><label>Duración (min)<input name="minutes" type="number" value="${p?.minutes ?? 60}" /></label></div>
       <div class="row"><label>Latitud<input name="lat" type="number" step="0.000001" value="${p?.lat ?? ''}" required /></label><label>Longitud<input name="lon" type="number" step="0.000001" value="${p?.lon ?? ''}" required /></label></div>
-      <h4>Foto</h4>${photoField(p?.photo)}
+      <h4>Foto</h4>${photoField(p?.photo)}<div class="row"><label>Crédito de la foto (autor · licencia)<input name="photoCredit" value="${esc(p?.photoCredit || '')}" placeholder="p. ej. Juan Pérez · CC BY-SA 4.0" /></label><label>Enlace del crédito<input name="photoCreditUrl" value="${esc(p?.photoCreditUrl || '')}" placeholder="https://…" /></label></div>
       <label class="chk"><input type="checkbox" name="indoor" ${p?.indoor ? 'checked' : ''}/> A cubierto (se recomienda cuando llueve o hace mucho calor)</label>
       <h4>Mejor momento</h4>${checks('best', MOMENTS, p?.best || ['morning', 'afternoon'], { morning: 'Mañana', afternoon: 'Tarde', evening: 'Atardecer', night: 'Noche' })}
       <h4>Nombre</h4>${i18nInputs('name', p?.name)}<h4>Etiqueta corta</h4>${i18nInputs('tag', p?.tag)}<h4>Descripción</h4>${i18nInputs('desc', p?.desc, { textarea: true })}

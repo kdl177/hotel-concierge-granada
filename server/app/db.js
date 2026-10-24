@@ -122,6 +122,8 @@ function migrate(db) {
   add('requests', 'first_response_at', 'TEXT');
   add('pois', 'photo', "TEXT DEFAULT ''");
   add('pois', 'indoor', 'INTEGER DEFAULT 0');
+  add('pois', 'photo_credit', "TEXT DEFAULT ''");
+  add('pois', 'photo_credit_url', "TEXT DEFAULT ''");
   add('services', 'photo', "TEXT DEFAULT ''");
   add('hotels', 'photo', "TEXT DEFAULT ''");
   // Account security: session revocation, forced password change, audit.
@@ -222,6 +224,8 @@ export function poiRow(r) {
     actions: P(r.actions_json, []),
     active: !!r.active,
     photo: r.photo || '',
+    photoCredit: r.photo_credit || '',
+    photoCreditUrl: r.photo_credit_url || '',
     indoor: !!r.indoor,
   };
 }

@@ -50,7 +50,8 @@
     "reset-password": "node scripts/reset-password.mjs",
     "test:concierge": "node --test test/concierge/",
     "test:e2e:concierge": "node test/e2e/run.mjs",
-    "test:all": "npm test && npm run test:concierge"
+    "test:all": "npm test && npm run test:concierge",
+    "photos:fetch": "node scripts/fetch-photos.mjs"
   },
   "dependencies": {
     "@jtarrio/signals": "^0.10.0",
