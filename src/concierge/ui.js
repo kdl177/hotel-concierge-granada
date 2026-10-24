@@ -57,7 +57,7 @@ const VEHICLE_ICON = {
 };
 const SNAPS = ['collapsed', 'half', 'full'];
 
-export function createUi({ root, globe, config, room = null }) {
+export function createUi({ root, globe, config, room = null, kiosk = false }) {
   const HOTEL = config.hotel;
   const HOTEL_SERVICES = config.services;
   const HOTEL_ACTIONS = config.actions;
@@ -390,6 +390,7 @@ export function createUi({ root, globe, config, room = null }) {
       </div>
       <h2 class="cg-sec">${esc(t('nearHotel'))}</h2>
       <div class="cg-list">${nearby.map((p) => poiCard(p, { wide: true })).join('')}</div>
+      ${kiosk ? takeAway() : ''}
       <div class="cg-foot">${esc(L(HOTEL.reception))} · <a href="${telHref(HOTEL.phone)}">${esc(HOTEL.phone)}</a></div>
     `;
   }
@@ -559,6 +560,7 @@ export function createUi({ root, globe, config, room = null }) {
       <button class="cg-btn ${inPlan ? 'ghost' : ''}" data-action="toggle-plan" data-id="${v.poi.id}">${icon(inPlan ? 'bookmark_remove' : 'bookmark_add')} ${esc(inPlan ? t('removeFromPlan') : t('addToPlan'))}</button>`
           : ''
       }
+      ${kiosk ? takeAway(v.poi?.id) : ''}
       <h3>${esc(t('howToGetThere'))}</h3>
       <div class="cg-modes">${modes
         .map(
@@ -568,6 +570,13 @@ export function createUi({ root, globe, config, room = null }) {
         .join('')}</div>
       <div class="cg-route" data-role="route"><p class="cg-muted">${esc(t('loading'))}</p></div>
     `;
+  }
+
+  /** Kiosk only: QR that opens the same app (and place) on the guest's phone. */
+  function takeAway(poiId = '') {
+    const q = `?h=${encodeURIComponent(HOTEL.slug)}${poiId ? `&p=${encodeURIComponent(poiId)}` : ''}`;
+    return `<aside class="cg-takeaway"><img src="/api/h/${encodeURIComponent(HOTEL.slug)}/qr.svg?p=${encodeURIComponent(poiId)}" width="92" height="92" alt="QR" />
+      <div><b>${esc(t(poiId ? 'takePlace' : 'takeApp'))}</b><span>${esc(t('takeHint'))}</span></div></aside>`;
   }
 
   function renderHotel() {
@@ -1706,7 +1715,41 @@ export function createUi({ root, globe, config, room = null }) {
     pollChat();
   });
   track('open', room ? 'qr' : 'web');
-  return { go, back, render };
+  /** Kiosk: forget the previous guest and start from the home screen. */
+  function reset() {
+    stopGuide();
+    state.chat.open = false;
+    state.requestForm = null;
+    state.plan = new Set();
+    state.done = new Set();
+    state.requests = [];
+    state.searchResults = null;
+    state.stack = [];
+    for (const k of Object.keys(localStorage))
+      if (k.startsWith('concierge.')) localStorage.removeItem(k);
+    const home = HOTEL.langs?.[0] || 'es';
+    if (getLang() !== home) {
+      setLang(home);
+      root.querySelectorAll('[data-lang]').forEach((b) => {
+        b.classList.toggle('on', b.dataset.lang === home);
+        b.setAttribute('aria-pressed', String(b.dataset.lang === home));
+      });
+      for (const p of POIS) {
+        const ent = globe.viewer.entities.getById(`marker:${p.id}`);
+        if (ent) ent.label.text = L(p.name);
+      }
+    }
+    state.routeCache.clear();
+    globe.clearRoute();
+    globe.setSelected(null);
+    globe.removeMarkers('result');
+    globe.removeMarkers('stop');
+    state.view = { name: 'home' };
+    setTab('explore');
+    setSheet('half');
+    render();
+  }
+  return { go, back, render, reset, openPoi };
 }
 
 function loadSet(key) {

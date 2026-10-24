@@ -270,6 +270,30 @@ export function createApi({
     res.json({ hotel: hotelPublic(h), services, actions, pois });
   });
 
+  // QR for kiosk screens: opens the guest app (optionally on one place) on the guest's phone.
+  const qrCache = new Map();
+  app.get('/h/:slug/qr.svg', async (req, res) => {
+    const h = hotelBySlug.get(req.params.slug);
+    if (!h) return res.status(404).end();
+    const poi = clean(req.query.p, 40).replace(/[^a-z0-9_-]/gi, '');
+    const base = publicUrl || `${req.protocol}://${req.get('host')}`;
+    const url = `${base}/?h=${encodeURIComponent(h.slug)}${poi ? `&p=${encodeURIComponent(poi)}` : ''}`;
+    let svg = qrCache.get(url);
+    if (!svg) {
+      svg = await QRCode.toString(url, {
+        type: 'svg',
+        margin: 1,
+        width: 360,
+        color: { dark: '#1d1a15', light: '#00000000' },
+      });
+      if (qrCache.size > 200) qrCache.clear();
+      qrCache.set(url, svg);
+    }
+    res.setHeader('Content-Type', 'image/svg+xml');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.send(svg);
+  });
+
   app.get('/h/:slug/room/:token', (req, res) => {
     const h = hotelBySlug.get(req.params.slug);
     if (!h) return res.status(404).json({ error: 'hotel not found' });

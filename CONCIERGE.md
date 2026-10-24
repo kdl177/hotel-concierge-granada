@@ -61,6 +61,9 @@ Datos persistentes en el volumen `concierge-data`. Copia de seguridad: `docker c
 ## Flujo de una solicitud
 Huésped (app) → `POST /api/h/:slug/requests` → SQLite → recepción la ve al instante (pitido), la asigna, confirma y añade nota → el huésped ve el estado en "Mis solicitudes". Cada cambio dispara el webhook del hotel (Admin → Hotel) y el global.
 
+## Modo kiosko (pantalla del lobby)
+Abre `/?h=<slug>&kiosk=1` a pantalla completa en la pantalla táctil del lobby (el enlace está en Admin → Hotel → "Pantalla de kiosko"). Texto y botones más grandes, sin zoom ni selección. Tras 120 s sin tocar (`&idle=300` para cambiarlo) muestra "Toca para empezar" con el hotel y la hora, orbita despacio sobre el hotel y **olvida todo lo del huésped anterior** (plan, solicitudes, chat, idioma). En el inicio y en cada lugar aparece un QR para llevarse la guía (o ese lugar) al móvil: `/api/h/<slug>/qr.svg?p=<lugar>`, que abre `/?h=<slug>&p=<lugar>`.
+
 ## Fotos de los lugares
 `npm run photos:fetch` descarga una foto libre (Wikimedia Commons) para cada lugar del hotel y guarda su crédito (autor · licencia), que la app muestra bajo la foto como exige la licencia. Necesita internet; se puede repetir con `--force` para renovarlas. Desde Admin → Lugares se puede sustituir cualquiera por una foto propia (y editar el crédito).
 

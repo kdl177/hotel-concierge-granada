@@ -242,6 +242,13 @@ async function renderHotel(m) {
     <h3>Foto del hotel</h3>${photoField(hotel.photo)}
     <h3>Notificaciones</h3>
     <div class="row"><label>Webhook (n8n, Make, Slack…) al crear/actualizar solicitudes<input name="webhookUrl" value="${esc(hotel.webhookUrl || '')}" placeholder="https://…" /></label><label>Email de aviso (requiere SMTP_URL en el servidor)<input name="notifyEmail" value="${esc(hotel.notifyEmail || '')}" /></label></div>
+    <h3>Pantalla de kiosko (lobby)</h3>
+    <div class="kiosk-help">
+      <p class="muted">Abre este enlace a pantalla completa (F11) en el ordenador o la pantalla táctil del lobby. Tras 2 minutos sin tocar vuelve al inicio, olvida lo que hizo el huésped anterior y muestra "Toca para empezar". El huésped puede llevarse la guía al móvil escaneando el QR que aparece en pantalla.</p>
+      <div class="row"><label>Enlace del kiosko<input readonly value="${esc(location.origin)}/?h=${esc(hotel.slug)}&kiosk=1" onfocus="this.select()" /></label>
+      <label>Con otro tiempo de reposo (segundos)<input readonly value="${esc(location.origin)}/?h=${esc(hotel.slug)}&kiosk=1&idle=300" onfocus="this.select()" /></label>
+      <a class="btn" target="_blank" rel="noopener" href="/?h=${esc(hotel.slug)}&kiosk=1">${icon('tv')} Abrir kiosko</a></div>
+    </div>
     <h3>Transporte público (horarios oficiales GTFS)</h3><div data-transit class="muted">Comprobando…</div>
     <div class="foot"><button class="btn primary">Guardar</button> <span class="muted">Slug de la app: <code>${esc(hotel.slug)}</code> → <a target="_blank" rel="noopener" href="/?h=${esc(hotel.slug)}">/?h=${esc(hotel.slug)}</a></span></div>
   </form>`;

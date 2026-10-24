@@ -225,3 +225,5 @@ h1, h2, .brand b, .login-title { font-family: var(--font-display); font-variatio
 .empty-row td { padding: 22px 10px; text-align: center; }
 .icon-field { display: flex; align-items: center; gap: 6px; }
 .icon-preview { width: 36px; height: 36px; flex: none; display: grid; place-items: center; border-radius: var(--r-md); background: var(--oro-soft); color: var(--oro); }
+.kiosk-help .row { align-items: flex-end; }
+.kiosk-help .btn { flex: none; }

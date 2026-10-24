@@ -378,8 +378,53 @@ export async function createGlobe({
     scene.requestRender();
   }
 
+  // ---------- slow orbit around a point (kiosk attract screen) ----------
+  let orbitStop = null;
+  /** Slowly circle `lat,lon` from `range` metres until stopOrbit(). */
+  async function orbit({
+    lat,
+    lon,
+    range = 1100,
+    pitch = -32,
+    degPerSec = 2.2,
+  }) {
+    stopOrbit();
+    const h = await groundHeight(lat, lon);
+    const center = Cesium.Cartesian3.fromDegrees(lon, lat, h);
+    const transform = Cesium.Transforms.eastNorthUpToFixedFrame(center);
+    let heading = Cesium.Math.toRadians(35);
+    let last = performance.now();
+    viewer.camera.cancelFlight();
+    const tick = () => {
+      const now = performance.now();
+      heading += Cesium.Math.toRadians(degPerSec) * ((now - last) / 1000);
+      last = now;
+      viewer.camera.lookAtTransform(
+        transform,
+        new Cesium.HeadingPitchRange(
+          heading,
+          Cesium.Math.toRadians(pitch),
+          range,
+        ),
+      );
+      scene.requestRender();
+    };
+    const remove = scene.preUpdate.addEventListener(tick);
+    orbitStop = () => {
+      remove();
+      viewer.camera.lookAtTransform(Cesium.Matrix4.IDENTITY);
+      orbitStop = null;
+    };
+    tick();
+  }
+  function stopOrbit() {
+    orbitStop?.();
+  }
+
   const api = {
     onPick,
+    orbit,
+    stopOrbit,
     viewer,
     Cesium,
     lowEnd,

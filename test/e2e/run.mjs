@@ -236,6 +236,28 @@ try {
   ok('account menu (change password / sign out everywhere)');
   await admin.keyboard.press('Escape');
 
+  // ---------- 5b. Kiosk mode: attract screen, reset, take-away QR ----------
+  const kiosk = await (await browser.createBrowserContext()).newPage();
+  await kiosk.setViewport({ width: 1366, height: 860 });
+  watch(kiosk, 'kiosk');
+  await kiosk.goto(`${BASE}/?kiosk=1&idle=30`, { waitUntil: 'domcontentloaded' });
+  await kiosk.waitForSelector('.cg-sheet', { timeout: 45000 });
+  await sleep(1500);
+  await kiosk.click('[data-lang=en]');
+  await kiosk.evaluate(() => document.querySelector('.cg-panel .cg-card[data-id=alhambra]').click());
+  await kiosk.waitForSelector('.cg-takeaway img');
+  const qr = await fetch(`${BASE}/api/h/gran-hotel-luna-granada/qr.svg?p=alhambra`);
+  if (qr.status !== 200 || !(await qr.text()).includes('<svg')) throw new Error('take-away QR missing');
+  ok('kiosk: place view offers a QR to take it on the phone');
+  await kiosk.evaluate(() => document.querySelector('[data-action=toggle-plan]').click());
+  await kiosk.waitForFunction(() => document.querySelector('.cg-attract') && !document.querySelector('.cg-attract').hidden, { timeout: 45000 });
+  const wiped = await kiosk.evaluate(() => ({ plan: localStorage.getItem('concierge.plan'), lang: document.documentElement.lang, hidden: getComputedStyle(document.getElementById('cg-app')).display }));
+  if (wiped.plan !== null || wiped.lang !== 'es' || wiped.hidden !== 'none') throw new Error(`kiosk reset incomplete: ${JSON.stringify(wiped)}`);
+  ok('kiosk: after idle it shows the attract screen and forgets the previous guest');
+  await kiosk.mouse.click(683, 430);
+  await kiosk.waitForFunction(() => document.querySelector('.cg-attract').hidden);
+  ok('kiosk: a tap wakes it on the home screen');
+
   // ---------- 6. Production surface ----------
   for (const [url, want] of [['/console.html', 404], ['/api/realtime/token', 404], ['/api/setup/status', 404], ['/manifest.webmanifest', 200], ['/robots.txt', 200]]) {
     const r = await fetch(BASE + url);

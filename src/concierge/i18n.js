@@ -119,6 +119,9 @@ const STRINGS = {
     evening: 'Al atardecer',
     night: 'Esta noche',
     searchResults: 'Resultados',
+    takeApp: 'Llévate la guía en tu móvil',
+    takePlace: 'Llévate este lugar en tu móvil',
+    takeHint: 'Escanea el código con la cámara. Sin instalar nada.',
     unnamedPlace: 'Sin nombre',
     searchOffline: 'No se ha podido buscar. Comprueba la conexión.',
     noResultsNear:
@@ -282,6 +285,9 @@ const STRINGS = {
     evening: 'At sunset',
     night: 'Tonight',
     searchResults: 'Results',
+    takeApp: 'Take the guide on your phone',
+    takePlace: 'Take this place on your phone',
+    takeHint: 'Scan the code with your camera. Nothing to install.',
     unnamedPlace: 'Unnamed',
     searchOffline: 'Search is unavailable right now. Check your connection.',
     noResultsNear:
@@ -446,6 +452,9 @@ const STRINGS = {
     evening: 'Au coucher du soleil',
     night: 'Ce soir',
     searchResults: 'Résultats',
+    takeApp: 'Emportez le guide sur votre mobile',
+    takePlace: 'Emportez ce lieu sur votre mobile',
+    takeHint: 'Scannez le code avec l’appareil photo. Rien à installer.',
     unnamedPlace: 'Sans nom',
     searchOffline: 'Recherche indisponible. Vérifiez la connexion.',
     noResultsNear:
@@ -609,6 +618,9 @@ const STRINGS = {
     evening: 'Zum Sonnenuntergang',
     night: 'Heute Abend',
     searchResults: 'Ergebnisse',
+    takeApp: 'Den Guide aufs Handy mitnehmen',
+    takePlace: 'Diesen Ort aufs Handy mitnehmen',
+    takeHint: 'Code mit der Kamera scannen. Nichts zu installieren.',
     unnamedPlace: 'Ohne Namen',
     searchOffline: 'Suche gerade nicht möglich. Bitte Verbindung prüfen.',
     noResultsNear:
