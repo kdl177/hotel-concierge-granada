@@ -8,7 +8,7 @@
  *   E2E_CHROME=/path/to/chrome  (optional; default: Puppeteer's browser)
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, existsSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -71,7 +71,12 @@ function watch(page, tag) {
     if (r.url().startsWith(BASE) && r.status() >= 400 && !r.url().includes('/api/route') && !r.url().includes('/api/geocode') && !r.url().includes('/api/google')) problems.push(`${tag} HTTP ${r.status()} ${r.url()}`);
   });
 }
+// E2E_SHOTS=<dir> also saves a screenshot of every audited screen, for visual review.
 async function axe(page, label) {
+  if (process.env.E2E_SHOTS) {
+    mkdirSync(process.env.E2E_SHOTS, { recursive: true });
+    await page.screenshot({ path: path.join(process.env.E2E_SHOTS, `${label.replace(/[^a-z0-9]+/gi, '-')}.png`) });
+  }
   await page.addScriptTag({ content: axeSource });
   const v = await page.evaluate(async () => (await window.axe.run(document, { runOnly: ['wcag2a', 'wcag2aa'] })).violations.map((x) => ({ id: x.id, impact: x.impact, n: x.nodes.length, t: x.nodes[0]?.target?.join(' ') })));
   const serious = v.filter((x) => x.impact === 'serious' || x.impact === 'critical');
@@ -235,6 +240,13 @@ try {
   await admin.waitForSelector('.modal [data-signout-all]');
   ok('account menu (change password / sign out everywhere)');
   await admin.keyboard.press('Escape');
+  // Statistics: KPIs and charts render with the real data created above (one request, one chat).
+  await admin.click('[data-tab=stats]');
+  await admin.waitForSelector('.chart-card');
+  const kpis = await admin.$$eval('.kpi-value', (els) => els.map((e) => e.textContent.trim()));
+  if (!kpis.length || kpis.every((v) => v === '0' || v === '—')) throw new Error(`stats KPIs: ${kpis.join(' ')}`);
+  ok('statistics tab with KPIs and charts', kpis.join(' · '));
+  await axe(admin, 'admin stats');
 
   // ---------- 5b. Kiosk mode: attract screen, reset, take-away QR ----------
   const kiosk = await (await browser.createBrowserContext()).newPage();
@@ -244,7 +256,9 @@ try {
   await kiosk.waitForSelector('.cg-sheet', { timeout: 45000 });
   await sleep(1500);
   await kiosk.click('[data-lang=en]');
-  await kiosk.evaluate(() => document.querySelector('.cg-panel .cg-card[data-id=alhambra]').click());
+  // Home suggestions depend on the time of day, so open the place from the full catalog.
+  await tap(kiosk, '[data-action=filter-cat][data-cat=all]');
+  await tap(kiosk, '.cg-card[data-id=alhambra]');
   await kiosk.waitForSelector('.cg-takeaway img');
   const qr = await fetch(`${BASE}/api/h/gran-hotel-luna-granada/qr.svg?p=alhambra`);
   if (qr.status !== 200 || !(await qr.text()).includes('<svg')) throw new Error('take-away QR missing');

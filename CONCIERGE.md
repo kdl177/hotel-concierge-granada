@@ -25,6 +25,7 @@ Primer arranque: crea `data/concierge.sqlite` con el Gran Hotel Luna de Granada 
 ```
 npm run test:concierge       # unitarias + integración de la API (node:test)
 npm run build && npm run test:e2e:concierge   # E2E en navegador real + accesibilidad (axe)
+# E2E_SHOTS=capturas npm run test:e2e:concierge  → guarda además una captura de cada pantalla auditada
 npm run test:all             # suite del proyecto base + concierge
 ```
 
