@@ -1,5 +1,6 @@
-# Replace with your domain. Caddy obtains and renews the HTTPS certificate automatically.
-concierge.example.com {
+# DOMAIN comes from .env (deploy/install.sh fills it). Caddy obtains and renews
+# the HTTPS certificate automatically, also for <ip>.sslip.io names.
+{$DOMAIN} {
 	encode zstd gzip
 	reverse_proxy concierge:4180
 }

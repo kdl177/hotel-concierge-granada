@@ -59,11 +59,11 @@ Producción:
 ```
 npm start                   # build + servidor en el puerto 4180
 ```
-Con Docker en un VPS:
+En un VPS (Ubuntu/Debian), un solo comando instala Docker, configura HTTPS y arranca:
 ```
-docker compose up -d --build
+curl -fsSL https://raw.githubusercontent.com/kdl177/hotel-concierge-granada/main/deploy/install.sh | sudo bash
 ```
-Antes, edita el dominio en `deploy/Caddyfile` y rellena `.env`. Todo detallado en `CONCIERGE.md`.
+Sin dominio usa `<ip>.sslip.io`. Copias diarias, actualización y restauración en `deploy/`. Todo detallado en `CONCIERGE.md` → Despliegue.
 
 ## 5. Pendientes
 Ver `PENDIENTES.md`. Lo más importante: ejecutar `npm install` tú en tu PC (hay dependencias nuevas), renovar el GTFS del Metro antes del 13/12/2026, configurar SMTP si quieres recuperación por email y restringir las claves de Google y Cesium por dominio. El gasto en USDT no se puede medir desde aquí.

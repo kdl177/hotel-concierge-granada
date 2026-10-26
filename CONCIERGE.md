@@ -52,12 +52,25 @@ PROVIDER_RATE_PER_MIN=60                    # límite por IP de rutas/búsquedas
 Roles superadmin / admin / recepción / personal; los admins de hotel no ven ni tocan al superadmin. Contraseñas scrypt, sesiones firmadas y revocables ("cerrar sesión en todos los dispositivos"), bloqueo tras 5 intentos, CSP y cabeceras de seguridad, protección CSRF por origen, límites a solicitudes de huéspedes, webhooks solo hacia Internet pública (https). Detalle en `AUDITORIA.md`.
 
 ## Despliegue (VPS con Docker)
+Funciona en cualquier VPS con Ubuntu/Debian (Hetzner, DigitalOcean, OVH, Contabo… desde ~4 €/mes). No hace falta dominio: sin él usa `<ip>.sslip.io`, que también recibe certificado HTTPS real.
+
 ```
-cp .env.example .env   # rellena PUBLIC_URL, CONCIERGE_SECRET, claves
-# edita deploy/Caddyfile con tu dominio (DNS apuntando al VPS)
-docker compose up -d --build
+ssh root@<ip-del-vps>
+curl -fsSL https://raw.githubusercontent.com/kdl177/hotel-concierge-granada/main/deploy/install.sh | sudo bash
 ```
-Datos persistentes en el volumen `concierge-data`. Copia de seguridad: `docker compose cp concierge:/data/concierge.sqlite ./backup.sqlite`.
+El instalador instala Docker, clona el proyecto en `/opt/concierge`, crea `.env` con un secreto y una contraseña de admin aleatorios, pregunta el dominio (Enter para usar la IP), levanta la app detrás de Caddy con HTTPS automático, espera a que responda y muestra las URLs y la contraseña temporal (una sola vez; el primer acceso obliga a cambiarla). Si ya existe `.env`, lo respeta. Programa una copia diaria (`04:17`, `backups/`, 14 días).
+
+Con dominio propio: crea un registro DNS `A` apuntando a la IP del VPS y ejecuta `sudo env DOMAIN=concierge.tuhotel.com bash deploy/install.sh` (o escríbelo cuando lo pregunte). Luego, en Admin → Habitaciones y QR, regenera los QR si antes apuntaban a otra dirección.
+
+Mantenimiento (en `/opt/concierge`):
+```
+sudo bash deploy/update.sh                  # copia de seguridad + git pull + rebuild sin perder datos
+sudo concierge-backup                       # copia ahora (backups/concierge-<fecha>.tar.gz: base de datos + fotos)
+sudo bash deploy/restore.sh backups/concierge-<fecha>.tar.gz
+docker compose logs -f concierge            # registro en vivo
+docker compose exec concierge npm run reset-password -- admin@hotel.local
+```
+Claves opcionales (Google Routes/Places, Cesium ion, SMTP, webhook): edita `/opt/concierge/.env` y `docker compose up -d`. Restringe las claves de Google y Cesium al dominio del VPS en sus consolas. Horarios GTFS: deja los `.zip` en `/opt/concierge/data/gtfs/` y recarga desde Admin.
 
 ## Flujo de una solicitud
 Huésped (app) → `POST /api/h/:slug/requests` → SQLite → recepción la ve al instante (pitido), la asigna, confirma y añade nota → el huésped ve el estado en "Mis solicitudes". Cada cambio dispara el webhook del hotel (Admin → Hotel) y el global.
