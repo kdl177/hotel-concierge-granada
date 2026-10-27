@@ -10,11 +10,17 @@
  *   POST /api/h/:slug/transit { origin:{lat,lon}, destination:{lat,lon}, destName?, lang?, at? }
  *     → { configured, source:'gtfs', routes:[…same shape as the Google proxy…] }
  *   GET  /api/admin/transit   → feeds loaded, validity dates, counts
+ *   POST /api/admin/transit/reload → re-read the zips (superadmin)
+ *   POST /api/admin/transit/update → download fresh zips from NAP, then reload (superadmin, needs NAP_API_KEY)
+ *
+ * With NAP_API_KEY set the server also refreshes the feeds by itself every
+ * GTFS_UPDATE_DAYS days (default 7), so a timetable never silently expires.
  */
 import { readdirSync, readFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import { createLimiter, limit, clientIp } from './security.js';
+import { updateFeeds, DEFAULT_FILES } from './gtfs-update.js';
 
 // ---------------------------------------------------------------- zip + csv
 /** Read every entry of a ZIP (stored or deflated) into { name: Buffer }. */
@@ -738,10 +744,46 @@ function toApi(net, r, origin, destination) {
 }
 
 // ---------------------------------------------------------------- service
-export function createTransit({ dataDir }) {
-  const dir = process.env.CONCIERGE_GTFS_DIR || path.join(dataDir, 'gtfs');
+export function createTransit({
+  dataDir,
+  env = process.env,
+  fetchImpl = fetch,
+  timers = { setInterval, setTimeout },
+}) {
+  const dir = env.CONCIERGE_GTFS_DIR || path.join(dataDir, 'gtfs');
   let net = null;
   let loading = null;
+  const napKey = env.NAP_API_KEY || '';
+  let updating = null;
+  let lastUpdate = null; // { at, report }
+  /** Downloads from NAP and reloads when something changed. One run at a time. */
+  function update() {
+    updating ||= (async () => {
+      const report = await updateFeeds({
+        dir,
+        apiKey: napKey,
+        files: env.GTFS_NAP_FILES || DEFAULT_FILES,
+        fetchImpl,
+        log: console.log,
+      });
+      if (report.some((r) => r.status === 'updated')) {
+        loading = null;
+        await load();
+      }
+      lastUpdate = { at: new Date().toISOString(), report };
+      return report;
+    })().finally(() => (updating = null));
+    return updating;
+  }
+  // Unattended refresh: shortly after start, then every GTFS_UPDATE_DAYS days.
+  const days = Number(env.GTFS_UPDATE_DAYS ?? 7);
+  if (napKey && days > 0 && env.NODE_ENV !== 'test') {
+    const every = days * 86400_000;
+    const tick = () =>
+      update().catch((e) => console.warn('[gtfs] update failed:', e.message));
+    timers.setTimeout(tick, 90_000)?.unref?.();
+    timers.setInterval(tick, every)?.unref?.();
+  }
   function load() {
     loading ||= new Promise((resolve) => {
       setImmediate(() => {
@@ -810,7 +852,28 @@ export function createTransit({ dataDir }) {
     );
     app.get('/admin/transit', admin, async (req, res) => {
       const n = await load();
-      res.json({ feeds: n.feeds, canReload: req.user.role === 'superadmin' });
+      res.json({
+        feeds: n.feeds,
+        canReload: req.user.role === 'superadmin',
+        nap: {
+          configured: Boolean(napKey),
+          autoDays: napKey ? days : 0,
+          last: lastUpdate,
+        },
+      });
+    });
+    app.post('/admin/transit/update', superadmin, async (req, res) => {
+      if (!napKey)
+        return res
+          .status(409)
+          .json({ error: 'NAP_API_KEY not set on the server' });
+      try {
+        const report = await update();
+        const n = await load();
+        res.json({ feeds: n.feeds, report, last: lastUpdate });
+      } catch (error) {
+        res.status(502).json({ error: error.message });
+      }
     });
     // Timetables are shared by every hotel on this server: only the superadmin reloads them.
     app.post('/admin/transit/reload', superadmin, async (req, res) => {
@@ -819,5 +882,10 @@ export function createTransit({ dataDir }) {
       res.json({ feeds: n.feeds });
     });
   }
-  return { mount, load, plan: (args) => load().then((n) => plan(n, args)) };
+  return {
+    mount,
+    load,
+    update,
+    plan: (args) => load().then((n) => plan(n, args)),
+  };
 }

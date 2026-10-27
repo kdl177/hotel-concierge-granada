@@ -280,25 +280,43 @@ async function renderHotel(m) {
   });
 }
 
-async function paintTransit(box, reload = false) {
+async function paintTransit(box, action = null) {
   try {
-    const data = reload
-      ? await api('/admin/transit/reload', { method: 'POST' })
+    const data = action
+      ? await api(`/admin/transit/${action}`, { method: 'POST' })
       : await api('/admin/transit');
     const feeds = data.feeds;
-    const canReload = reload || data.canReload;
-    const how = canReload
-      ? `descarga el nuevo .zip en nap.transportes.gob.es, déjalo en la carpeta <code>data/gtfs</code> del servidor (sustituyendo el antiguo) y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button>`
-      : 'los horarios los actualiza el administrador general del servidor (superadmin).';
+    const info = action ? await api('/admin/transit') : data;
+    const canReload = info.canReload;
+    const nap = info.nap || {};
     const fmtD = (d) =>
       d && d.length === 8
         ? `${d.slice(6)}/${d.slice(4, 6)}/${d.slice(0, 4)}`
         : '—';
+    const how = canReload
+      ? nap.configured
+        ? `el servidor los descarga solo de nap.transportes.gob.es cada ${nap.autoDays} días${nap.last ? ` (última comprobación ${new Date(nap.last.at).toLocaleString('es-ES')})` : ''}. <button type="button" class="btn sm" data-update-transit>Descargar ahora</button> <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button>`
+        : `pon tu clave de nap.transportes.gob.es en <code>NAP_API_KEY</code> (archivo <code>.env</code> del servidor) y se renovarán solos; o descarga el .zip a mano, déjalo en <code>data/gtfs</code> y pulsa <button type="button" class="btn sm" data-reload-transit>Recargar horarios</button>`
+      : 'los horarios los actualiza el administrador general del servidor (superadmin).';
     const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const soon = new Date(Date.now() + 30 * 86400000)
       .toISOString()
       .slice(0, 10)
       .replace(/-/g, '');
+    const report = data.report
+      ? `<p class="small">${data.report
+          .map((r) => {
+            const label =
+              {
+                updated: 'actualizado',
+                unchanged: 'ya estaba al día',
+                kept: 'se mantiene el local',
+                error: 'error',
+              }[r.status] || r.status;
+            return `<b>${esc(r.name)}</b>: ${label}${r.validTo ? ` · válido hasta ${fmtD(r.validTo)}` : ''}${r.reason ? ` <span class="muted">(${esc(r.reason)})</span>` : ''}`;
+          })
+          .join('<br>')}</p>`
+      : '';
     box.classList.remove('muted');
     box.innerHTML = feeds.length
       ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th>Estado</th></tr></thead><tbody>${feeds
@@ -313,13 +331,20 @@ async function paintTransit(box, reload = false) {
           })
           .join(
             '',
-          )}</tbody></table><p class="muted small">Para actualizar: ${how}</p>`
-      : `<p class="muted">No hay horarios cargados. Para activarlos: ${how}</p>`;
+          )}</tbody></table>${report}<p class="muted small">Para actualizar: ${how}</p>`
+      : `${report}<p class="muted">No hay horarios cargados. Para activarlos: ${how}</p>`;
     box
       .querySelector('[data-reload-transit]')
       ?.addEventListener('click', () => {
         box.innerHTML = 'Recargando…';
-        paintTransit(box, true);
+        paintTransit(box, 'reload');
+      });
+    box
+      .querySelector('[data-update-transit]')
+      ?.addEventListener('click', () => {
+        box.innerHTML =
+          'Descargando de nap.transportes.gob.es… (puede tardar un minuto)';
+        paintTransit(box, 'update');
       });
   } catch (err) {
     box.textContent = errorText(err);

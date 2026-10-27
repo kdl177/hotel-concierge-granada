@@ -87,9 +87,12 @@ El huésped puede buscar cualquier cosa: *farmacia*, *para comer*, *cajero*, *su
 ## Transporte público (horarios oficiales, sin Google)
 La app calcula rutas en bus y metro con los horarios GTFS oficiales, en el propio servidor (sin claves ni coste por consulta).
 
-1. Cuenta gratuita en https://nap.transportes.gob.es
-2. Descarga el .zip de cada operador (Granada: bus urbano fichero 1367, Metro fichero 1370).
-3. Déjalos sin descomprimir en `data/gtfs/` (en Docker se montan desde `./data/gtfs`).
-4. Admin → Hotel → "Transporte público" muestra operadores, viajes y **fecha de caducidad**; al renovar, sustituye el .zip y pulsa **Recargar horarios**.
+**Renovación automática (recomendado).** Los horarios caducan (el del Metro, el 13/12/2026). Para que se renueven solos:
+1. Cuenta gratuita en https://nap.transportes.gob.es y copia la *ApiKey* de tu perfil de usuario.
+2. En `.env`: `NAP_API_KEY=<tu clave>`. Opcional: `GTFS_NAP_FILES=1367:bus-urbano-granada,1370:metro-granada` (ficheros NAP; es el valor por defecto) y `GTFS_UPDATE_DAYS=7`.
+3. El servidor descarga los ficheros al arrancar y cada 7 días; solo sustituye un fichero si el nuevo es válido al menos hasta la misma fecha que el actual, y nunca deja uno corrupto. En Admin → Hotel → Transporte público hay un botón **Descargar ahora** y se ve la última comprobación.
+También a mano: `npm run gtfs:update` (misma lógica, desde la línea de comandos).
+
+**Sin clave:** descarga el .zip de cada operador en NAP (Granada: bus urbano fichero 1367, Metro fichero 1370), déjalo sin descomprimir en `data/gtfs/` (en Docker se monta desde `./data/gtfs`) y pulsa **Recargar horarios** en Admin.
 
 El planificador combina bus y metro con hasta un transbordo, calcula el paseo a la parada y avisa de "Mejor a pie" cuando el transporte no compensa. Si no hay horarios cargados y existe `GOOGLE_MAPS_SERVER_API_KEY`, usa Google Routes como alternativa.

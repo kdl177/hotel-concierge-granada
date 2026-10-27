@@ -4,12 +4,12 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createConciergeApp } from '../../server/app/index.js';
 
-export async function startApp({ env = {}, mailer } = {}) {
+export async function startApp({ env = {}, mailer, fetchImpl } = {}) {
   const dir = mkdtempSync(path.join(tmpdir(), 'concierge-test-'));
   const fullEnv = { NODE_ENV: 'test', CONCIERGE_DB: path.join(dir, 'db.sqlite'), CONCIERGE_SECRET: 'test-secret', CONCIERGE_GTFS_DIR: path.join(dir, 'gtfs'), ...env };
   const log = console.log;
   console.log = () => {};
-  const { app, db } = createConciergeApp({ env: fullEnv, mailer, fetchImpl: async () => ({ ok: false, status: 503, json: async () => ({}) }) });
+  const { app, db } = createConciergeApp({ env: fullEnv, mailer, fetchImpl: fetchImpl || (async () => ({ ok: false, status: 503, json: async () => ({}) })) });
   console.log = log;
   const server = await new Promise((r) => {
     const s = app.listen(0, '127.0.0.1', () => r(s));

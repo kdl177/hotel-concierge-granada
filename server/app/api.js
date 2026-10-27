@@ -164,7 +164,11 @@ export function createApi({
   const weather = createWeather(fetchImpl ? { fetchImpl } : {});
   const media = createMedia({ dataDir });
   const stats = createStats({ db });
-  const transit = createTransit({ dataDir });
+  const transit = createTransit({
+    dataDir,
+    env,
+    ...(fetchImpl ? { fetchImpl } : {}),
+  });
   const places = createPlaces(fetchImpl ? { fetchImpl } : {});
 
   // ---------- helpers ----------
