@@ -107,3 +107,16 @@ Repasé todo de nuevo con ojos frescos: servidor (ataques confirmados contra una
 **No corregido** (con motivo en PENDIENTES): *DNS rebinding* entre la comprobación del webhook y el envío, cualquiera puede bloquear 15 min una cuenta conocida, el logout normal no revoca una cookie copiada (está "cerrar sesión en todos los dispositivos") y los datos del huésped en un kiosko compartido.
 
 **Pruebas tras la 3ª auditoría:** 42/42 unitarias y de integración, y 26/26 en el E2E. 0 errores de consola y 0 fallos serios de accesibilidad.
+
+## Pruebas en Windows (28 oct 2026)
+
+Primera ejecución de las suites en el PC del usuario (Windows 11, Node 24.16). Hasta ahora solo se habían ejecutado en Linux.
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-25 | `npm run test:concierge` no ejecutaba ninguna prueba: `node --test test/concierge/` trata la carpeta como un archivo (`MODULE_NOT_FOUND`) | ✅ Glob `test/concierge/*.test.mjs` |
+| A-26 | La prueba de fotos pasaba el *shim* de `fetch` como ruta `C:\…` a `--import`, y Node exige una URL `file://` | ✅ `pathToFileURL` |
+| A-27 | El E2E decía "dist/ missing" con `dist/` presente (`URL.pathname` da `/C:/…`) y al terminar fallaba con `EPERM` al borrar la carpeta temporal con el SQLite aún abierto | ✅ `fileURLToPath` y espera a que el servidor termine |
+| — | El CI no ejecutaba las pruebas del concierge | ✅ D-17 |
+
+**Resultado:** `test:concierge` 56/56 y 2 omitidas (las de `install.sh` necesitan bash). E2E 31/31, 0 errores de consola y 0 fallos serios de accesibilidad.

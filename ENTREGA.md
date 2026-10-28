@@ -28,8 +28,8 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 - Usuarios con estado (activo / contraseña temporal) y último acceso.
 - Mensajes de error traducidos.
 
-**Diseño "Nazarí"**
-- Sistema común para huésped y back-office: paleta (noche, oro nazarí, almagra, arrayán, azulejo), Fraunces + Manrope, estrella nazarí en sellos y fondos, foco visible y `prefers-reduced-motion`.
+**Diseño "Cuaderno del conserje"** (sustituye al primer diseño "Nazarí", D-13 y D-14)
+- Papel cálido sobre el mapa nocturno para huésped, Recepción y Admin: títulos en Fraunces, texto en Manrope, versalitas en las etiquetas, filas con filo en lugar de tarjetas, un solo acento terracota y oliva para "abierto". Foco visible y `prefers-reduced-motion`.
 - Fuentes e iconos dentro del proyecto: sin Google Fonts, 24 KB de iconos en lugar de ~5 MB, y funciona aunque falle la red externa.
 
 **Rendimiento y SEO**
@@ -41,7 +41,16 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 - 33 pruebas unitarias y de integración del concierge, más un E2E en navegador real.
 - 42 pruebas del proyecto base que ya estaban rotas, arregladas.
 
-## 3. Informe de pruebas (7 oct 2026, entorno de pruebas Linux, Node 22)
+## 3. Informe de pruebas
+
+**Actual (28 oct 2026, Windows 11, Node 24.16):**
+| Suite | Resultado |
+|---|---|
+| `npm run test:concierge` | **56/56 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |
+| `npm run build && npm run test:e2e:concierge` | **31/31 ✅**, 0 errores de consola, 0 fallos serios de accesibilidad |
+| CI (GitHub Actions) | Ejecuta también `test:concierge` desde el 28 oct (D-17) |
+
+**Primera entrega (7 oct 2026, entorno de pruebas Linux, Node 22):**
 | Suite | Resultado |
 |---|---|
 | `npm run test:concierge` (unitarias + API: roles, escalada de privilegios, bloqueo, recuperación, revocación, XSS, SSRF, CSRF, límites, chat, fotos, estadísticas, GTFS real, tiempo) | **33/33 ✅** |

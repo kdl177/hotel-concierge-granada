@@ -13,3 +13,5 @@
 - **P-11** — Bloqueo de cuentas: 25 fallos desde cualquier IP bloquean una cuenta conocida durante 15 minutos. La alternativa (CAPTCHA) añade un servicio externo. Si pasa, el superadmin puede seguir entrando desde su IP habitual (el límite por IP+cuenta es independiente) y existe `npm run reset-password`.
 - **P-12** — ✅ Resuelto (24 oct): el modo kiosko borra plan, solicitudes, chat e idioma tras el tiempo de reposo (120 s por defecto, `&idle=`).
 - **P-13** — El logout normal borra la cookie, pero una cookie copiada sigue valiendo hasta 12 h. Para cortarla está "Cerrar sesión en todos los dispositivos".
+- **P-14** — El E2E no corre en el CI (D-17): hay que ejecutarlo en local antes de subir. Añadirlo al CI exige descargar Chromium en el job (unos 150 MB por ejecución).
+- **P-15** — En tu PC el Chromium de Puppeteer está en `D:\cache\puppeteer` (SSD por USB) y tarda más de 30 s en arrancar. Mientras siga ahí, usa el Chrome del sistema: `$env:E2E_CHROME="C:\Program Files\Google\Chrome\Application\chrome.exe"` antes de `npm run test:e2e:concierge`.
