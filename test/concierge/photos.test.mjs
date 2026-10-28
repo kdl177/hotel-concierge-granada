@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
 import { startApp, client, superadmin, STRONG } from './helpers.mjs';
 
 test('photos:fetch stores a Commons photo with its credit, and the guest sees it', async () => {
@@ -25,7 +26,7 @@ test('photos:fetch stores a Commons photo with its credit, and the guest sees it
       };
     `);
     const dbFile = app.db.location ? app.db.location() : null;
-    const env = { ...process.env, CONCIERGE_DB: path.join(app.dir, 'db.sqlite'), NODE_OPTIONS: `--import=${shim}` };
+    const env = { ...process.env, CONCIERGE_DB: path.join(app.dir, 'db.sqlite'), NODE_OPTIONS: `--import=${pathToFileURL(shim).href}` };
     const r = spawnSync(process.execPath, ['scripts/fetch-photos.mjs'], { env, encoding: 'utf8', cwd: path.resolve('.') });
     assert.match(r.stdout, /✓ alhambra: .*Jebulon · CC BY-SA 3.0 · Wikimedia Commons/);
     assert.ok(existsSync(path.join(app.dir, 'uploads', app.db.prepare('SELECT id FROM hotels').get().id, 'poi-alhambra.png')));
