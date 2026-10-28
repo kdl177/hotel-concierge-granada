@@ -12,9 +12,10 @@ import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync } from 'node:f
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
-const root = path.resolve(new URL('../..', import.meta.url).pathname);
+const root = fileURLToPath(new URL('../..', import.meta.url));
 if (!existsSync(path.join(root, 'dist/index.html'))) {
   console.error('dist/ missing: run `npm run build` first');
   process.exit(2);
@@ -283,8 +284,10 @@ try {
   console.error('\n✗ E2E failure:', error.message);
 }
 await browser.close();
+const serverExit = new Promise((r) => server.once('exit', r));
 server.kill();
-rmSync(dir, { recursive: true, force: true });
+await serverExit;
+rmSync(dir, { recursive: true, force: true, maxRetries: 10 });
 if (problems.length) {
   exitCode = 1;
   console.error(`\n✗ ${problems.length} problem(s):\n - ${problems.join('\n - ')}`);
