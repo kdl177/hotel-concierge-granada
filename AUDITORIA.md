@@ -120,3 +120,19 @@ Primera ejecución de las suites en el PC del usuario (Windows 11, Node 24.16). 
 | — | El CI no ejecutaba las pruebas del concierge | ✅ D-17 |
 
 **Resultado:** `test:concierge` 56/56 y 2 omitidas (las de `install.sh` necesitan bash). E2E 31/31, 0 errores de consola y 0 fallos serios de accesibilidad.
+
+## Recepción y Admin en móvil (29 oct 2026)
+
+Medido con Chrome emulando un móvil de 375×812 en las 13 pantallas del back-office (8 pestañas de Admin, el modal de usuario y 4 vistas de Recepción).
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-28 | La cabecera fija ocupaba 223 px de 812 en Admin (pestañas en 3 filas) y 183 en Recepción | ✅ Una fila con el nombre del hotel y los botones como icono (el texto sigue siendo su nombre accesible), y las pestañas en una fila con scroll horizontal: 101 px. La pestaña activa se mantiene a la vista tras cada cambio |
+| A-29 | Las 7 tablas ensanchaban la página hasta 950 px (Lugares) y el móvil reducía el zoom. Por eso a 375 px no se podía pulsar "Guardar" en el modal de usuario. La causa no estaba solo en la tabla: el encabezado `.sr-only` de la columna de acciones (`position: absolute`) escapaba de cualquier contenedor con scroll | ✅ La tabla se desplaza por dentro (`display: block; overflow-x: auto; position: relative`) y la página mide 375 px en las 13 pantallas |
+| A-30 | En el chat de Recepción el cuadro de mensaje medía unos 60 px de ancho y la conversación abierta quedaba debajo de la lista | ✅ Asunto a todo el ancho, mensaje y "Enviar" debajo (223 px); al abrir una conversación se desplaza hasta ella |
+| A-31 | Contraste: la vista previa de la conversación seleccionada (4,41:1 sobre `--paper-2`) y la hora de los mensajes del sistema (`opacity: 0.85`) no llegaban a 4,5:1. No se había visto porque el E2E nunca auditaba la pestaña de chat | ✅ La conversación seleccionada usa `--paper` (4,86:1) y la hora va sin opacidad |
+| — | En pantallas táctiles los botones del back-office medían 28–36 px | ✅ Mínimo 44 px con `pointer: coarse` |
+
+Los campos del formulario del hotel pasan de 3 a 2 por fila en el móvil. No se ha probado en un teléfono físico, solo con la emulación de Chrome.
+
+**Pruebas:** el E2E añade Admin (5 pestañas) y Recepción (bandeja, chat y estancias) a 375 px: sin scroll lateral, cabecera ≤ 130 px, pestaña activa visible, cuadro del chat ≥ 200 px, y axe en Lugares y en el chat. Sin el CSS nuevo falla (`page 589px, header 223px`). Resultado: 35/35.
