@@ -249,6 +249,48 @@ try {
   ok('statistics tab with KPIs and charts', kpis.join(' · '));
   await axe(admin, 'admin stats');
 
+  // ---------- 5a. Reception and Admin on a phone (375 px) ----------
+  const phone = { width: 375, height: 812, isMobile: true, hasTouch: true, deviceScaleFactor: 2 };
+  const settled = (page) => page.waitForFunction(() => document.querySelector('#main')?.children.length && !document.querySelector('#main .boot'));
+  const fits = async (page, label) => {
+    await sleep(300);
+    const m = await page.evaluate(() => ({ w: document.documentElement.scrollWidth, bar: document.querySelector('.bar').offsetHeight, tab: (({ left, right }) => left >= -1 && right <= innerWidth + 1)(document.querySelector('.tabs .on').getBoundingClientRect()) }));
+    if (m.w > phone.width || m.bar > 130 || !m.tab) throw new Error(`${label} on a phone: page ${m.w}px, header ${m.bar}px, active tab visible ${m.tab}`);
+  };
+  const adminPhone = await adminCtx.newPage();
+  await adminPhone.setViewport(phone);
+  watch(adminPhone, 'admin phone');
+  await adminPhone.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  for (const t of ['hotel', 'users', 'rooms', 'pois', 'stats']) {
+    await adminPhone.$eval(`[data-tab=${t}]`, (b) => b.click());
+    await settled(adminPhone);
+    await fits(adminPhone, `admin ${t}`);
+  }
+  ok('admin on a phone: no sideways scroll, compact header, active tab in view');
+  await adminPhone.$eval('[data-tab=pois]', (b) => b.click());
+  await settled(adminPhone);
+  await axe(adminPhone, 'admin places (phone)');
+  await adminPhone.close();
+  const recPhone = await recCtx.newPage();
+  await recPhone.setViewport(phone);
+  watch(recPhone, 'reception phone');
+  await recPhone.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
+  await settled(recPhone);
+  await fits(recPhone, 'reception inbox');
+  await recPhone.$eval('[data-tab=chats]', (b) => b.click());
+  await recPhone.waitForSelector('[data-open-chat]', { timeout: 15000 });
+  await recPhone.$eval('[data-open-chat]', (b) => b.click());
+  await recPhone.waitForSelector('[data-chat-form] textarea');
+  await fits(recPhone, 'reception chat');
+  const box = await recPhone.$eval('[data-chat-form] textarea', (e) => Math.round(e.getBoundingClientRect().width));
+  if (box < 200) throw new Error(`reception chat on a phone: message box ${box}px wide`);
+  await axe(recPhone, 'reception chat (phone)');
+  await recPhone.$eval('[data-tab=stays]', (b) => b.click());
+  await settled(recPhone);
+  await fits(recPhone, 'reception stays');
+  ok('reception on a phone: inbox, chat and stays fit', `message box ${box}px`);
+  await recPhone.close();
+
   // ---------- 5b. Kiosk mode: attract screen, reset, take-away QR ----------
   const kiosk = await (await browser.createBrowserContext()).newPage();
   await kiosk.setViewport({ width: 1366, height: 860 });

@@ -90,6 +90,9 @@ function shell() {
       <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
     </header>
     <main id="main"></main>`;
+  root
+    .querySelector('.tabs .on')
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
     setHotelOverride(e.target.value);
     localStorage.setItem('bo.hotel', e.target.value);

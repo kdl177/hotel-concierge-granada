@@ -551,6 +551,11 @@ document.addEventListener('click', (e) => {
   state.chatKey = b.dataset.openChat;
   state.chat = null;
   refreshChat().then(refreshChatList).then(paintChatList);
+  // Stacked layout (phones): the conversation sits below the list, so bring it into view.
+  if (matchMedia('(max-width: 900px)').matches)
+    document
+      .querySelector('[data-chat-pane]')
+      ?.scrollIntoView({ block: 'start' });
 });
 document.addEventListener('submit', async (e) => {
   const form = e.target.closest('[data-chat-form]');
