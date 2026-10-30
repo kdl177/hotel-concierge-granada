@@ -136,3 +136,16 @@ Medido con Chrome emulando un móvil de 375×812 en las 13 pantallas del back-of
 Los campos del formulario del hotel pasan de 3 a 2 por fila en el móvil. No se ha probado en un teléfono físico, solo con la emulación de Chrome.
 
 **Pruebas:** el E2E añade Admin (5 pestañas) y Recepción (bandeja, chat y estancias) a 375 px: sin scroll lateral, cabecera ≤ 130 px, pestaña activa visible, cuadro del chat ≥ 200 px, y axe en Lugares y en el chat. Sin el CSS nuevo falla (`page 589px, header 223px`). Resultado: 35/35.
+
+## Barrido de anchos (30 oct 2026)
+
+Las 17 pantallas (6 del huésped: inicio, catálogo, lugar, solicitud, tareas y chat; 8 de Admin; 3 de Recepción) a 320, 768, 1024 y 1366 px. Se midió el ancho del documento, los elementos que salen de la pantalla, el texto recortado sin puntos suspensivos y la altura de la cabecera fija.
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-32 | A 768 px (tablet), entre los cortes de 700 y 900 px, las 8 pestañas de Admin se apilaban en una columna: cabecera fija de 403 px. A 1024 px medía 157 y Recepción a 768 px, también 157 | ✅ Cabecera en dos filas allí donde una no basta (siempre en Admin, por debajo de 1000 px en Recepción): 101–103 px en todos los anchos. Recepción en escritorio sigue en una fila (65 px) |
+| A-33 | A 768 px la tabla de Lugares ensanchaba la página hasta 958 px | ✅ Las tablas se desplazan por dentro hasta 1000 px. A partir de ahí caben |
+
+La app del huésped no tenía fallos a 320 px: el nombre largo del hotel se recorta con puntos suspensivos y la franja del tiempo se desplaza a propósito.
+
+**Pruebas:** el E2E añade Admin (Usuarios y Lugares) y Recepción a 768 px. Sin el arreglo falla (`header 403px`). Resultado: 37/37.

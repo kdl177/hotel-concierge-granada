@@ -47,7 +47,7 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 | Suite | Resultado |
 |---|---|
 | `npm run test:concierge` | **56/56 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |
-| `npm run build && npm run test:e2e:concierge` | **35/35 ✅** (incluye Recepción y Admin a 375 px, 29 oct), 0 errores de consola, 0 fallos serios de accesibilidad |
+| `npm run build && npm run test:e2e:concierge` | **37/37 ✅** (incluye Recepción y Admin a 375 y 768 px), 0 errores de consola, 0 fallos serios de accesibilidad |
 | CI (GitHub Actions) | Ejecuta también `test:concierge` desde el 28 oct (D-17) y el E2E completo desde el 30 oct (D-19) |
 
 **Primera entrega (7 oct 2026, entorno de pruebas Linux, Node 22):**
