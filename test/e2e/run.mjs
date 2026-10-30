@@ -255,7 +255,7 @@ try {
   const fits = async (page, label) => {
     await sleep(300);
     const m = await page.evaluate(() => ({ w: document.documentElement.scrollWidth, bar: document.querySelector('.bar').offsetHeight, tab: (({ left, right }) => left >= -1 && right <= innerWidth + 1)(document.querySelector('.tabs .on').getBoundingClientRect()) }));
-    if (m.w > phone.width || m.bar > 130 || !m.tab) throw new Error(`${label} on a phone: page ${m.w}px, header ${m.bar}px, active tab visible ${m.tab}`);
+    if (m.w > page.viewport().width || m.bar > 130 || !m.tab) throw new Error(`${label} at ${page.viewport().width}px: page ${m.w}px, header ${m.bar}px, active tab visible ${m.tab}`);
   };
   const adminPhone = await adminCtx.newPage();
   await adminPhone.setViewport(phone);
@@ -267,6 +267,15 @@ try {
     await fits(adminPhone, `admin ${t}`);
   }
   ok('admin on a phone: no sideways scroll, compact header, active tab in view');
+  // Tablet: between the phone and desktop breakpoints the 8 tabs used to stack into a 400px header.
+  await adminPhone.setViewport({ ...phone, width: 768, height: 1024 });
+  for (const t of ['users', 'pois']) {
+    await adminPhone.$eval(`[data-tab=${t}]`, (b) => b.click());
+    await settled(adminPhone);
+    await fits(adminPhone, `admin ${t}`);
+  }
+  await adminPhone.setViewport(phone);
+  ok('admin on a tablet (768 px): same compact header, places table scrolls inside itself');
   await adminPhone.$eval('[data-tab=pois]', (b) => b.click());
   await settled(adminPhone);
   await axe(adminPhone, 'admin places (phone)');
@@ -289,6 +298,11 @@ try {
   await settled(recPhone);
   await fits(recPhone, 'reception stays');
   ok('reception on a phone: inbox, chat and stays fit', `message box ${box}px`);
+  await recPhone.setViewport({ ...phone, width: 768, height: 1024 });
+  await recPhone.$eval('[data-tab=inbox]', (b) => b.click());
+  await settled(recPhone);
+  await fits(recPhone, 'reception inbox');
+  ok('reception on a tablet (768 px): compact header');
   await recPhone.close();
 
   // ---------- 5b. Kiosk mode: attract screen, reset, take-away QR ----------
