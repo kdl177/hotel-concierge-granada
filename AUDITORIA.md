@@ -149,3 +149,17 @@ Las 17 pantallas (6 del huésped: inicio, catálogo, lugar, solicitud, tareas y 
 La app del huésped no tenía fallos a 320 px: el nombre largo del hotel se recorta con puntos suspensivos y la franja del tiempo se desplaza a propósito.
 
 **Pruebas:** el E2E añade Admin (Usuarios y Lugares) y Recepción a 768 px. Sin el arreglo falla (`header 403px`). Resultado: 37/37.
+
+## Barrido de teclado (31 oct 2026)
+
+Admin (Usuarios, con su modal «Nuevo») y Recepción (bandeja y chat) usados solo con teclado a 1366 o 1280 px, 768 px y 375 px. En cada parada se midió si el anillo de foco se ve, si el elemento está en pantalla y si el orden sigue las filas de la cabecera.
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-34 | En Admin, Tab recorría las pestañas (fila 2) antes que «Recepción», «App» y «Mi cuenta» (fila 1): el orden del HTML no seguía el visual desde la cabecera en dos filas (A-32) | ✅ En Admin los botones de cuenta van antes que las pestañas en el HTML. En Recepción, cuya cabecera es de una fila en escritorio y de dos por debajo de 1000 px, `reading-flow: flex-visual` hace que Tab siga lo que se ve |
+| A-35 | En Recepción, «Historial», «Hecha», «Confirmar» y el resto de botones de una tarjeta repintan la lista: el foco caía al `body` y el siguiente Tab empezaba otra vez desde arriba. Lo mismo pasaba con la lista de chats en cada refresco (5 s) | ✅ Al repintar, el foco vuelve al mismo control. Si ya no existe, va al primer botón de la tarjeta, y si la lista queda vacía, al filtro |
+| A-36 | Si llegaba un mensaje del huésped mientras recepción escribía la respuesta, el panel del chat se repintaba y la caja de texto perdía el foco: lo que se tecleaba después se perdía. Afectaba también a quien usa ratón | ✅ El cursor sigue en la caja, en la misma posición, con el borrador intacto |
+
+Sin hallazgos: el modal (foco inicial en el primer campo, Tab y Mayús+Tab dan la vuelta dentro, Esc devuelve el foco a «Nuevo») y el anillo de foco, visible en todas las paradas. El buscador de Recepción lo pinta su contenedor (`.search:focus-within`).
+
+**Pruebas:** el E2E añade 4 comprobaciones de teclado. Cada una falla sin su arreglo: `Tab jumps back up the header, Hoteles → Recepción`, `after "Historial" focus is on body` y `reply box after a new guest message: focused false`. Resultado: 41/41.
