@@ -305,6 +305,126 @@ try {
   ok('reception on a tablet (768 px): compact header');
   await recPhone.close();
 
+  // ---------- 5c. Keyboard only: Tab order, visible focus, dialogs, focus kept across live repaints ----------
+  const focused = (page) => page.evaluate(() => {
+    const e = document.activeElement;
+    const ring = (x) => { const cs = getComputedStyle(x); return cs.boxShadow !== 'none' || (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0); };
+    const r = e.getBoundingClientRect();
+    return {
+      id: e === document.body ? 'body' : `${e.tagName.toLowerCase()}${[...e.attributes].filter((a) => a.name.startsWith('data-') || a.name === 'name').map((a) => `[${a.name}=${a.value}]`).join('')} "${(e.getAttribute('aria-label') || e.textContent || '').trim().slice(0, 24)}"`,
+      // The search box draws its ring on the wrapper (.search:focus-within).
+      ring: e !== document.body && (ring(e) || (!!e.closest('.search') && ring(e.closest('.search')))),
+      seen: r.width > 0 && r.bottom > 0 && r.top < innerHeight,
+      inBar: !!e.closest('.bar'),
+      inModal: !!e.closest('.modal'),
+      top: Math.round(r.top),
+    };
+  });
+  /** Tab from the top of the page until focus leaves it; every stop must show its ring and be on screen, and the header is read row by row. */
+  const tabPage = async (page, label) => {
+    await page.evaluate(() => document.activeElement?.blur());
+    const stops = [];
+    for (let i = 0; i < 60; i++) {
+      await page.keyboard.press('Tab');
+      const f = await focused(page);
+      if (f.id === 'body' || (stops.length && f.id === stops[0].id)) break;
+      stops.push(f);
+    }
+    const bad = stops.filter((s) => !s.ring || !s.seen);
+    if (bad.length) throw new Error(`${label}: focus not visible on ${bad.map((s) => s.id).join(', ')}`);
+    const bar = stops.filter((s) => s.inBar);
+    const back = bar.findIndex((s, i) => i && s.top < bar[i - 1].top - 4);
+    if (back > 0) throw new Error(`${label}: Tab jumps back up the header, ${bar[back - 1].id} → ${bar[back].id}`);
+    return stops;
+  };
+  const kbAdmin = await adminCtx.newPage();
+  await kbAdmin.setViewport({ width: 1366, height: 900 });
+  watch(kbAdmin, 'admin keyboard');
+  await kbAdmin.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  await kbAdmin.$eval('[data-tab=users]', (b) => b.click());
+  await kbAdmin.waitForSelector('[data-new]');
+  const adminStops = await tabPage(kbAdmin, 'admin users');
+  // isMobile changes reload the page in Puppeteer: go back to the tab after each one.
+  const usersTab = async () => {
+    await kbAdmin.waitForSelector('[data-tab=users]');
+    await kbAdmin.$eval('[data-tab=users]', (b) => b.click());
+    await kbAdmin.waitForSelector('[data-new]');
+  };
+  await kbAdmin.setViewport(phone);
+  await usersTab();
+  await tabPage(kbAdmin, 'admin users (phone)');
+  await kbAdmin.setViewport({ width: 1366, height: 900 });
+  await usersTab();
+  ok('admin by keyboard: Tab reads the header row by row, focus ring on every stop', `${adminStops.length} stops`);
+  // Dialog: focus starts on the first field, Tab and Shift+Tab wrap inside it, Escape gives focus back to the opener.
+  await kbAdmin.focus('[data-new]');
+  await kbAdmin.keyboard.press('Enter');
+  await kbAdmin.waitForSelector('.modal');
+  const start = await focused(kbAdmin);
+  const fwd = [];
+  for (let i = 0; i < 8; i++) {
+    await kbAdmin.keyboard.press('Tab');
+    fwd.push(await focused(kbAdmin));
+  }
+  await kbAdmin.keyboard.down('Shift');
+  // From the second field back past the first one and "Cerrar" (first in the dialog): wraps to "Guardar".
+  for (let i = 0; i < 3; i++) await kbAdmin.keyboard.press('Tab');
+  await kbAdmin.keyboard.up('Shift');
+  const backTo = await focused(kbAdmin);
+  const cycle = [start, ...fwd].map((s) => s.id);
+  const closeAt = cycle.findIndex((x) => x.includes('"Cerrar"'));
+  if (!start.id.startsWith('input[name=name]')) throw new Error(`dialog opens with focus on ${start.id}`);
+  if (![start, ...fwd].every((s) => s.inModal && s.ring)) throw new Error(`dialog Tab escapes or hides focus: ${cycle.join(' → ')}`);
+  if (closeAt < 0 || !cycle[closeAt - 1]?.includes('Guardar') || cycle[closeAt + 1] !== cycle[0]) throw new Error(`dialog Tab does not wrap Guardar → Cerrar → first field: ${cycle.join(' → ')}`);
+  if (!backTo.id.includes('Guardar')) throw new Error(`Shift+Tab from "Cerrar" goes to ${backTo.id}`);
+  await kbAdmin.keyboard.press('Escape');
+  await kbAdmin.waitForFunction(() => !document.querySelector('.modal'));
+  const after = await focused(kbAdmin);
+  if (!after.id.includes('[data-new=') || !after.ring) throw new Error(`after Escape focus is on ${after.id}`);
+  ok('dialog by keyboard: starts on the first field, Tab/Shift+Tab stay inside, Escape returns to "Nuevo"');
+  await kbAdmin.close();
+
+  const kbRec = await recCtx.newPage();
+  await kbRec.setViewport({ width: 1280, height: 860 });
+  watch(kbRec, 'reception keyboard');
+  await kbRec.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
+  await kbRec.waitForSelector('.card [data-history]');
+  await tabPage(kbRec, 'reception inbox');
+  await kbRec.setViewport({ width: 768, height: 1024, isMobile: true, hasTouch: true });
+  await kbRec.waitForSelector('.card [data-history]');
+  await tabPage(kbRec, 'reception inbox (tablet)');
+  await kbRec.setViewport({ width: 1280, height: 860 });
+  await kbRec.waitForSelector('.card [data-history]');
+  // Buttons that repaint the cards must not drop the focus to the top of the page.
+  await kbRec.focus('.card [data-history]');
+  await kbRec.keyboard.press('Enter');
+  await kbRec.waitForSelector('.card .events');
+  const hist = await focused(kbRec);
+  await kbRec.focus('.card [data-status=done]');
+  await kbRec.keyboard.press('Enter');
+  await kbRec.waitForFunction(() => !document.querySelector('.card [data-status=done]'), { timeout: 10000 });
+  const done = await focused(kbRec);
+  if (!hist.id.includes('[data-history=')) throw new Error(`after "Historial" focus is on ${hist.id}`);
+  if (done.id === 'body' || !done.ring) throw new Error(`after "Hecha" focus is on ${done.id}`);
+  ok('reception by keyboard: Tab order and rings, focus stays put when the cards repaint', `after "Hecha": ${done.id}`);
+  // A guest message arriving while reception types must not steal the cursor.
+  const gk = await guest.evaluate(() => Object.entries(localStorage).find(([k]) => k.startsWith('concierge.guestKey.'))?.[1]);
+  await kbRec.$eval('[data-tab=chats]', (b) => b.click());
+  await kbRec.waitForSelector(`[data-open-chat="${gk}"]`, { timeout: 15000 });
+  await kbRec.$eval(`[data-open-chat="${gk}"]`, (b) => b.click());
+  await kbRec.waitForSelector('[data-chat-form] textarea');
+  await kbRec.focus('[data-chat-form] textarea');
+  await kbRec.keyboard.type('Hola, le');
+  const before = await kbRec.$$eval('[data-msgs] .msg', (m) => m.length);
+  const sent = await guest.evaluate(async (key) => (await fetch('/api/h/gran-hotel-luna-granada/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ key, body: '¿A qué hora abre el spa?', lang: 'es' }) })).status, gk);
+  if (sent !== 200 && sent !== 201) throw new Error(`guest chat message: HTTP ${sent}`);
+  await kbRec.waitForFunction((n) => document.querySelectorAll('[data-msgs] .msg').length > n, { timeout: 15000 }, before);
+  await kbRec.keyboard.type(' contesto');
+  const draft = await kbRec.evaluate(() => ({ on: document.activeElement.matches('[data-chat-form] textarea'), v: document.activeElement.value }));
+  if (!draft.on || draft.v !== 'Hola, le contesto') throw new Error(`reply box after a new guest message: focused ${draft.on}, text "${draft.v}"`);
+  ok('reception chat: a new guest message does not take the cursor out of the reply box');
+  await kbRec.close();
+
   // ---------- 5b. Kiosk mode: attract screen, reset, take-away QR ----------
   const kiosk = await (await browser.createBrowserContext()).newPage();
   await kiosk.setViewport({ width: 1366, height: 860 });

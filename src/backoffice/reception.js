@@ -148,20 +148,47 @@ function renderMain() {
   renderCards();
 }
 
+/** Repaint a box without losing the focus (and caret) that was inside it: same control if it still exists, else the nearest button (a filter, if the box emptied). */
+function keepFocus(box, html) {
+  const a = document.activeElement;
+  if (!box.contains(a) || a === box) return void (box.innerHTML = html);
+  const own = (el) => {
+    const d = [...el.attributes].find((x) => x.name.startsWith('data-'));
+    return d
+      ? `[${d.name}="${CSS.escape(d.value)}"]`
+      : el.tagName.toLowerCase();
+  };
+  const scope = a.parentElement.closest('[data-id], [data-chat-form]');
+  const pre = scope && box.contains(scope) ? `${own(scope)} ` : '';
+  const sel = pre + own(a);
+  const caret = [a.selectionStart, a.selectionEnd];
+  box.innerHTML = html;
+  const next =
+    box.querySelector(sel) ||
+    (pre && box.querySelector(`${pre}button`)) ||
+    box.querySelector('button') ||
+    document.querySelector('#main button');
+  next?.focus();
+  if (next?.matches('textarea, input') && caret[0] != null)
+    next.setSelectionRange(...caret);
+}
+
 function renderCards() {
   const box = document.querySelector('[data-cards]');
   if (!box) return;
   document.querySelector('[data-pending]').textContent =
     state.counts.pending || '';
   if (!state.requests.length) {
-    box.innerHTML = '<p class="muted">Sin solicitudes.</p>';
+    keepFocus(box, '<p class="muted">Sin solicitudes.</p>');
     return;
   }
-  box.innerHTML = state.requests
-    .map((r) => {
-      const open = state.expanded.has(r.id);
-      const ev = state.events.get(r.id);
-      return `<article class="card ${esc(r.status)}" data-id="${esc(r.id)}">
+  keepFocus(
+    box,
+    state.requests
+      .map((r) => {
+        const open = state.expanded.has(r.id);
+        const ev = state.events.get(r.id);
+        return `<article class="card ${esc(r.status)}" data-id="${esc(r.id)}">
         <div class="top">
           <span class="room">${esc(r.room)}</span>
           <div class="who"><b>${esc(TYPE_LABEL[r.type] || r.type)}</b>${r.name ? `<div class="muted">${esc(r.name)}</div>` : ''}</div>
@@ -183,8 +210,9 @@ function renderCards() {
         </div>
         ${open ? `<ol class="events">${(ev || []).map((e) => `<li><span class="muted">${esc(fmt(e.at))}</span> ${esc(e.user || 'Huésped')} · ${esc(eventLabel(e))}</li>`).join('') || '<li class="muted">Cargando…</li>'}</ol>` : ''}
       </article>`;
-    })
-    .join('');
+      })
+      .join(''),
+  );
 }
 
 function eventLabel(e) {
@@ -447,20 +475,23 @@ function renderChats(main) {
 function paintChatList() {
   const box = document.querySelector('[data-chat-list]');
   if (!box) return;
-  box.innerHTML = state.chats.length
-    ? state.chats
-        .map(
-          (
-            c,
-          ) => `<button class="chat-item ${c.key === state.chatKey ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-open-chat="${esc(c.key)}">
+  keepFocus(
+    box,
+    state.chats.length
+      ? state.chats
+          .map(
+            (
+              c,
+            ) => `<button class="chat-item ${c.key === state.chatKey ? 'on' : ''} ${c.unread ? 'unread' : ''}" data-open-chat="${esc(c.key)}">
             <div class="chat-item-top"><b>${esc(who(c))}</b><span class="muted">${esc(fmt(c.lastAt))}</span></div>
             <div class="chat-item-last">${c.lastAuthor === 'system' ? esc(sysLabel(c.lastBody || '')) : `${c.lastAuthor === 'staff' ? 'Tú: ' : ''}${esc(c.lastBody || '')}`}</div>
             ${c.unread ? `<span class="pill">${c.unread}</span>` : ''}
             <span class="lang">${esc((c.lang || '').toUpperCase())}</span>
           </button>`,
-        )
-        .join('')
-    : '<p class="muted" style="padding:14px">Sin conversaciones todavía.</p>';
+          )
+          .join('')
+      : '<p class="muted" style="padding:14px">Sin conversaciones todavía.</p>',
+  );
 }
 async function refreshChat() {
   paintChatList();
@@ -477,7 +508,9 @@ async function refreshChat() {
     if (sameCount && pane.querySelector('[data-chat-form]')) return; // nothing new: keep the draft untouched
     const draft = pane.querySelector('[data-chat-form] textarea')?.value || '';
     const ctx = pane.querySelector('[data-chat-form] select')?.value || '';
-    pane.innerHTML = `
+    keepFocus(
+      pane,
+      `
       <header class="chat-head"><div><b>${esc(who(data.chat))}</b>${data.chat.blocked ? ' <span class="badge rejected">Bloqueado</span>' : ''}<div class="muted">Idioma del huésped: ${esc((data.chat.lang || 'es').toUpperCase())}</div></div>
         <button class="btn sm ${data.chat.blocked ? '' : 'no'}" data-block="${data.chat.blocked ? 0 : 1}" title="${data.chat.blocked ? 'Permitir de nuevo mensajes y solicitudes' : 'Impedir que este dispositivo envíe mensajes o solicitudes (spam, abuso)'}">${icon(data.chat.blocked ? 'lock_open' : 'block')} ${data.chat.blocked ? 'Desbloquear' : 'Bloquear dispositivo'}</button></header>
       <div class="chat-body">
@@ -509,7 +542,8 @@ async function refreshChat() {
         <select class="sel" aria-label="Asunto del mensaje">${['<option value="">Mensaje general</option>', ...data.requests.map((r) => `<option value="${r.id}" ${r.id === ctx ? 'selected' : ''}>Sobre: ${esc(TYPE_LABEL[r.type] || r.type)}</option>`)].join('')}</select>
         <textarea rows="2" aria-label="Mensaje al huésped" maxlength="1000" placeholder="Escribe al huésped… (Enter envía, Mayús+Enter salto de línea)">${esc(draft)}</textarea>
         <button class="btn primary" type="submit">${icon('send')} Enviar</button>
-      </form>`;
+      </form>`,
+    );
     const msgs = pane.querySelector('[data-msgs]');
     msgs.scrollTop = msgs.scrollHeight;
   } catch (err) {

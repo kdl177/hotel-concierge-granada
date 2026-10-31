@@ -86,8 +86,8 @@ function shell() {
     <header class="bar">
       <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Administración</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
-      <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
       <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
+      <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
     </header>
     <main id="main"></main>`;
   root

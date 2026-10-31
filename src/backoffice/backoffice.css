@@ -60,7 +60,7 @@ h4 { font: 700 10.5px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform
 
 /* Header: a printed letterhead — title in serif, tabs underlined like a running head */
 /* Two rows (name + account buttons, then one scrolling row of tabs): Admin's 8 tabs never fit beside the name */
-.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 4px 18px; padding: 10px 22px 0; background: var(--paper); border-bottom: 1px solid var(--ink); flex-wrap: wrap; }
+.bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 4px 18px; padding: 10px 22px 0; background: var(--paper); border-bottom: 1px solid var(--ink); flex-wrap: wrap; reading-flow: flex-visual; } /* Tab follows the rows as drawn, not the HTML order */
 .brand { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .brand > .msym { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ink); color: var(--ink); display: grid; place-items: center; background: transparent; }
 .brand b { font-size: 18px; }
