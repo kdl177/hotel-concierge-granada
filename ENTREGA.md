@@ -43,7 +43,7 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 
 ## 3. Informe de pruebas
 
-**Actual (31 oct 2026, Windows 11, Node 24.16):**
+**Actual (3 nov 2026, Windows 11, Node 24.16):**
 | Suite | Resultado |
 |---|---|
 | `npm run test:concierge` | **56/56 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |

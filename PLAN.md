@@ -13,6 +13,6 @@ Presupuesto: el enunciado fija 259 USDT, pero desde la sesión no puedo medir el
 | 4 | Sistema de diseño propio + accesibilidad WCAG AA + SEO/PWA | 20 % | A-19, A-20, A-21 |
 | 5 | Pruebas automáticas en el repo (unitarias, integración, E2E, axe), cero errores de consola, 2ª auditoría | 20 % (reserva) | A-10 |
 | 6 | Ciclos extra: rendimiento, más cobertura y pulido | resto | — |
-| 7 (28 oct) | Pruebas en Windows y en el CI, subida a GitHub → validar GTFS con clave real → Recepción y Admin en móvil → primera instalación en VPS (SMTP, claves por dominio) | — | A-25–A-36, D-17–D-20 (Windows, CI, móvil, tablet y teclado hechos del 28 al 31 oct) |
+| 7 (28 oct) | Pruebas en Windows y en el CI, subida a GitHub → validar GTFS con clave real → Recepción y Admin en móvil → primera instalación en VPS (SMTP, claves por dominio) | — | A-25–A-36, D-17–D-20 (Windows, CI, móvil, tablet y teclado hechos del 28 oct al 3 nov) |
 
 Orden: críticos → altos → funciones → diseño → pruebas. Cada bloque va en un commit pequeño y se valida con pruebas antes de pasar al siguiente.
