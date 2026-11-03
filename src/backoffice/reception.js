@@ -73,14 +73,14 @@ function shell() {
     <header class="bar">
       <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Recepción</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
+      <div class="me"><span>${esc(state.user.name || state.user.email)}</span>
+        ${['admin', 'superadmin'].includes(state.user.role) ? `<a class="btn sm" href="/admin.html">${icon('settings')} Admin</a>` : ''}
+        ${accountButton(state.user)}</div>
       <nav class="tabs">
         <button data-tab="inbox" class="${state.tab === 'inbox' ? 'on' : ''}">${icon('inbox')} Solicitudes <span class="pill" data-pending></span></button>
         <button data-tab="chats" class="${state.tab === 'chats' ? 'on' : ''}">${icon('forum')} Chat <span class="pill" data-chat-unread>${state.chatUnread || ''}</span></button>
         <button data-tab="stays" class="${state.tab === 'stays' ? 'on' : ''}">${icon('bed')} Estancias</button>
       </nav>
-      <div class="me"><span>${esc(state.user.name || state.user.email)}</span>
-        ${['admin', 'superadmin'].includes(state.user.role) ? `<a class="btn sm" href="/admin.html">${icon('settings')} Admin</a>` : ''}
-        ${accountButton(state.user)}</div>
     </header>
     <main id="main"></main>`;
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {

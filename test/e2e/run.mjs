@@ -318,9 +318,10 @@ try {
       inBar: !!e.closest('.bar'),
       inModal: !!e.closest('.modal'),
       top: Math.round(r.top),
+      left: Math.round(r.left + (e.closest('.tabs')?.scrollLeft || 0)), // the tab strip scrolls on phones: compare positions inside it
     };
   });
-  /** Tab from the top of the page until focus leaves it; every stop must show its ring and be on screen, and the header is read row by row. */
+  /** Tab from the top of the page until focus leaves it; every stop must show its ring and be on screen, and the header is read row by row, left to right (HTML order, no reading-flow: same in every browser). */
   const tabPage = async (page, label) => {
     await page.evaluate(() => document.activeElement?.blur());
     const stops = [];
@@ -333,8 +334,8 @@ try {
     const bad = stops.filter((s) => !s.ring || !s.seen);
     if (bad.length) throw new Error(`${label}: focus not visible on ${bad.map((s) => s.id).join(', ')}`);
     const bar = stops.filter((s) => s.inBar);
-    const back = bar.findIndex((s, i) => i && s.top < bar[i - 1].top - 4);
-    if (back > 0) throw new Error(`${label}: Tab jumps back up the header, ${bar[back - 1].id} → ${bar[back].id}`);
+    const back = bar.findIndex((s, i) => i && (s.top < bar[i - 1].top - 4 || (Math.abs(s.top - bar[i - 1].top) <= 4 && s.left < bar[i - 1].left)));
+    if (back > 0) throw new Error(`${label}: Tab goes backwards in the header, ${bar[back - 1].id} → ${bar[back].id}`);
     return stops;
   };
   const kbAdmin = await adminCtx.newPage();
@@ -390,9 +391,11 @@ try {
   await kbRec.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
   await kbRec.waitForSelector('.card [data-history]');
   await tabPage(kbRec, 'reception inbox');
-  await kbRec.setViewport({ width: 768, height: 1024, isMobile: true, hasTouch: true });
-  await kbRec.waitForSelector('.card [data-history]');
-  await tabPage(kbRec, 'reception inbox (tablet)');
+  for (const vp of [{ width: 768, height: 1024, isMobile: true, hasTouch: true }, phone]) {
+    await kbRec.setViewport(vp);
+    await kbRec.waitForSelector('.card [data-history]');
+    await tabPage(kbRec, `reception inbox (${vp.width} px)`);
+  }
   await kbRec.setViewport({ width: 1280, height: 860 });
   await kbRec.waitForSelector('.card [data-history]');
   // Buttons that repaint the cards must not drop the focus to the top of the page.
