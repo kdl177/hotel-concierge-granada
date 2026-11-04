@@ -5,7 +5,7 @@
  * (axe-core, WCAG 2 A/AA) and zero same-origin console errors.
  *
  *   npm run build && npm run test:e2e:concierge
- *   E2E_CHROME=/path/to/chrome  (optional; default: Puppeteer's browser)
+ *   E2E_CHROME=/path/to/chrome  (optional; default: the system Chrome on Windows if installed, else Puppeteer's browser)
  */
 import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, readFileSync, mkdirSync } from 'node:fs';
@@ -16,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
+// Puppeteer's own Chromium may live on a slow disk (P-15): on Windows prefer the installed Chrome.
+const systemChrome = process.platform === 'win32' ? path.join(process.env['ProgramFiles'] || 'C:/Program Files', 'Google/Chrome/Application/chrome.exe') : '';
 if (!existsSync(path.join(root, 'dist/index.html'))) {
   console.error('dist/ missing: run `npm run build` first');
   process.exit(2);
@@ -41,7 +43,7 @@ for (let i = 0; i < 60; i++) {
 const axeSource = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
 const browser = await puppeteer.launch({
   headless: true,
-  executablePath: process.env.E2E_CHROME || undefined,
+  executablePath: process.env.E2E_CHROME || [systemChrome].find(existsSync),
   args: ['--no-sandbox', '--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--lang=es-ES'],
 });
 
@@ -334,8 +336,8 @@ try {
     const bad = stops.filter((s) => !s.ring || !s.seen);
     if (bad.length) throw new Error(`${label}: focus not visible on ${bad.map((s) => s.id).join(', ')}`);
     const bar = stops.filter((s) => s.inBar);
-    const back = bar.findIndex((s, i) => i && (s.top < bar[i - 1].top - 4 || (Math.abs(s.top - bar[i - 1].top) <= 4 && s.left < bar[i - 1].left)));
-    if (back > 0) throw new Error(`${label}: Tab goes backwards in the header, ${bar[back - 1].id} → ${bar[back].id}`);
+    const back = bar.findIndex((s, i) => i && (s.top < bar[i - 1].top - 12 || (Math.abs(s.top - bar[i - 1].top) <= 12 && s.left < bar[i - 1].left))); // rows are 40+ px apart; items of different heights sit a few px apart within one
+    if (back > 0) throw new Error(`${label}: Tab goes backwards in the header, ${bar[back - 1].id} (top ${bar[back - 1].top}, left ${bar[back - 1].left}) → ${bar[back].id} (top ${bar[back].top}, left ${bar[back].left})`);
     return stops;
   };
   const kbAdmin = await adminCtx.newPage();
@@ -458,6 +460,26 @@ try {
     if (r.status !== want) throw new Error(`${url} → ${r.status}, expected ${want}`);
   }
   ok('production publishes only the concierge surface');
+
+  // ---------- 7. Superadmin with several hotels: the selector joins the header without breaking its Tab order ----------
+  const made = await admin.evaluate(async () => (await fetch('/api/super/hotels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Hotel Prueba E2E', slug: 'hotel-prueba-e2e', city: 'Granada', lat: 37.1773, lon: -3.5986, adminEmail: 'admin@prueba-e2e.local', adminPassword: 'Prueba2026e2e' }) })).status);
+  if (made !== 200 && made !== 201) throw new Error(`second hotel: HTTP ${made}`);
+  const multi = await adminCtx.newPage();
+  watch(multi, 'admin two hotels');
+  for (const vp of [phone, { width: 1366, height: 900 }]) {
+    await multi.setViewport(vp);
+    await multi.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+    await multi.waitForSelector('.bar [data-hotel]');
+    await settled(multi);
+    if (vp.isMobile) {
+      await fits(multi, 'admin with a hotel selector');
+      await axe(multi, 'admin two hotels (phone)');
+    }
+    const stops = await tabPage(multi, `admin with a hotel selector (${vp.width} px)`);
+    if (!stops.some((s) => s.id.startsWith('select[data-hotel'))) throw new Error('hotel selector not reached by Tab');
+  }
+  ok('superadmin with two hotels: the selector stays in the first row on a phone and Tab reads the header in order');
+  await multi.close();
 } catch (error) {
   exitCode = 1;
   console.error('\n✗ E2E failure:', error.message);
