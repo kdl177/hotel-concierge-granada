@@ -191,7 +191,9 @@ label.chk { flex-direction: row; align-items: center; gap: 8px; color: var(--ink
   .brand-title { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .me > span { display: none; }
   .me .btn { font-size: 0; gap: 0; padding: 8px; min-width: 40px; justify-content: center; }
-  .bar > [data-hotel] { order: 2; flex: 1 0 100%; }
+  /* Several hotels: the selector shows the hotel's name, so it takes the title's place in the first row (same row as in the HTML: Tab reads it in order) */
+  .bar.multi .brand > div { display: none; }
+  .bar > [data-hotel] { flex: 1 1 120px; min-width: 0; padding: 6px 8px; }
   .tabs { margin: 0 -14px; padding: 0 6px; }
   .row > label { flex: 1 1 140px; min-width: 0; }
   .modal-wrap { padding: 8px; }

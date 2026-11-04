@@ -83,7 +83,7 @@ const TABS = [
 
 function shell() {
   root.innerHTML = `
-    <header class="bar">
+    <header class="bar${state.hotels.length > 1 ? ' multi' : ''}">
       <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Administración</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
       <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
@@ -322,7 +322,7 @@ async function paintTransit(box, action = null) {
       : '';
     box.classList.remove('muted');
     box.innerHTML = feeds.length
-      ? `<table class="table"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th>Estado</th></tr></thead><tbody>${feeds
+      ? `<table class="table" tabindex="0"><thead><tr><th>Operador</th><th>Viajes</th><th>Paradas</th><th>Válido hasta</th><th>Estado</th></tr></thead><tbody>${feeds
           .map((f) => {
             const st =
               f.validTo < today
@@ -356,7 +356,7 @@ async function paintTransit(box, action = null) {
 
 function listPage(m, { title, help, columns, rows, onNew }) {
   m.innerHTML = `<div class="toolbar"><h2>${esc(title)}</h2><button class="btn primary" data-new>${icon('add')} Nuevo</button></div>${help ? `<p class="muted">${help}</p>` : ''}
-    <table class="table"><thead><tr>${columns.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}<th scope="col"><span class="sr-only">Acciones</span></th></tr></thead><tbody>${rows.join('') || `<tr class="empty-row"><td colspan="${columns.length + 1}" class="muted">Todavía no hay nada aquí. Pulsa <b>Nuevo</b> para crear el primero.</td></tr>`}</tbody></table>`;
+    <table class="table" tabindex="0"><thead><tr>${columns.map((c) => `<th scope="col">${esc(c)}</th>`).join('')}<th scope="col"><span class="sr-only">Acciones</span></th></tr></thead><tbody>${rows.join('') || `<tr class="empty-row"><td colspan="${columns.length + 1}" class="muted">Todavía no hay nada aquí. Pulsa <b>Nuevo</b> para crear el primero.</td></tr>`}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', onNew);
 }
 const rowBtns = (id, extra = '', { canDelete = true } = {}) =>
@@ -709,7 +709,7 @@ async function renderHotels(m) {
   const { hotels } = await api('/super/hotels');
   state.hotels = hotels;
   m.innerHTML = `<div class="toolbar"><h2>Hoteles</h2><button class="btn primary" data-new>${icon('add')} Nuevo hotel</button></div>
-    <table class="table"><thead><tr><th>Nombre</th><th>Slug</th><th>Ciudad</th><th>Pendientes</th><th>Activo</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>
+    <table class="table" tabindex="0"><thead><tr><th>Nombre</th><th>Slug</th><th>Ciudad</th><th>Pendientes</th><th>Activo</th><th><span class="sr-only">Acciones</span></th></tr></thead><tbody>
     ${hotels.map((h) => `<tr><td><b>${esc(h.name)}</b></td><td><code>${esc(h.slug)}</code></td><td>${esc(h.city)}</td><td>${h.pending}</td><td>${h.active ? '✔' : '—'}</td><td class="right"><a class="btn sm" target="_blank" rel="noopener" href="/?h=${esc(h.slug)}">${icon('open_in_new')} App</a><button class="btn sm" data-toggle="${h.id}" data-active="${h.active ? 1 : 0}">${h.active ? 'Desactivar' : 'Activar'}</button></td></tr>`).join('')}</tbody></table>`;
   m.querySelector('[data-new]').addEventListener('click', async () => {
     const v = await modal({
