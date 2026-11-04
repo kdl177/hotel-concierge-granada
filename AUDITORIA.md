@@ -165,3 +165,15 @@ Sin hallazgos: el modal (foco inicial en el primer campo, Tab y Mayús+Tab dan l
 **Pruebas:** el E2E añade 4 comprobaciones de teclado. Cada una falla sin su arreglo: `Tab jumps back up the header, Hoteles → Recepción`, `after "Historial" focus is on body` y `reply box after a new guest message: focused false`. Resultado: 41/41.
 
 *3 nov:* la comprobación de la cabecera exige además izquierda → derecha dentro de cada fila (posición medida dentro de la tira de pestañas, que se desplaza en el móvil) y recorre Recepción a 1280, 768 y 375 px. Con el orden antiguo de Recepción y sin `reading-flow` falla: `Tab goes backwards in the header, Estancias → Mi cuenta`. Sigue en 41/41.
+
+## Varios hoteles, Chrome local y CI (4 nov 2026)
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-37 | Superadmin con varios hoteles en el móvil: el selector de hotel iba en su propia fila entre la cuenta y las pestañas, así que Tab saltaba hacia arriba (mismo fallo que A-34). El E2E solo tenía un hotel y no lo cubría | ✅ El selector se queda en la primera fila, donde está en el HTML; como ya muestra el nombre del hotel, en el móvil ocupa el sitio del título (`.bar.multi`). Cabecera de 103 px, no 144 |
+| A-38 | En el móvil las tablas se desplazan en horizontal (A-33), pero una tabla sin botones dentro (la de horarios GTFS en la pestaña Hotel) no se podía alcanzar ni desplazar con teclado: axe `scrollable-region-focusable`. No se había visto porque el E2E solo auditaba con axe la pestaña Lugares en el móvil, cuyas filas tienen botones | ✅ `tabindex="0"` en las cuatro tablas de Admin y Recepción; el anillo de foco lo pone la regla general de `tokens.css` |
+
+**Pruebas:** el E2E crea un segundo hotel al final y recorre Admin con teclado a 375 y 1366 px con el selector presente, con axe en el móvil. Sin el CSS del selector falla (`header 144px`); sin `tabindex` falla axe (`scrollable-region-focusable×1 (table)`). Resultado: 43/43.
+
+**Sin tocar código del hotel:** el E2E usa solo el Chrome instalado en Windows si `E2E_CHROME` no está definido (P-15), y el CI pasa a `actions/setup-node` 7.1.0, fijado por SHA (P-16).
+
