@@ -552,7 +552,7 @@ export function createApi({
         notifier.mail({
           to: user.email,
           subject: 'Restablecer tu contraseña · Concierge',
-          text: `Hola ${user.name || ''},\n\nPara crear una contraseña nueva abre este enlace (válido 30 minutos, un solo uso):\n${base}/admin.html#reset=${raw}\n\nSi no lo has pedido tú, ignora este mensaje.`,
+          text: `Hola ${user.name || ''},\n\nPara crear una contraseña nueva abre este enlace (válido 30 minutos, un solo uso):\n${base}/reception.html#reset=${raw}\n\nSi no lo has pedido tú, ignora este mensaje.`,
         });
       }
       // Same answer whether or not the account exists.

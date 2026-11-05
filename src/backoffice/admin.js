@@ -1,4 +1,4 @@
-/** Hotel admin panel: hotel data, services, quick actions, places, rooms (QR), users, hotels (superadmin). */
+/** Configuration tabs of the back-office, mounted by reception.js for admin and superadmin: hotel data, services, quick actions, places, rooms (QR), users, hotels. */
 import {
   api,
   esc,
@@ -7,12 +7,8 @@ import {
   fmt,
   confirmDialog,
   errorText,
-  requireLogin,
-  accountButton,
-  bindAccount,
   toast,
   modal,
-  setHotelOverride,
   ROLE_LABEL,
   TYPE_LABEL,
 } from './common.js';
@@ -47,28 +43,10 @@ const SERVICE_CATS = [
 const FIELDS = ['when', 'people', 'destination', 'details'];
 const MOMENTS = ['morning', 'afternoon', 'evening', 'night'];
 
-const root = document.getElementById('app');
 const state = { user: null, hotel: null, hotels: [], tab: 'hotel', items: [] };
 
-const session = await requireLogin(root, 'Administración');
-state.user = session.user;
-state.hotel = session.hotel;
-if (!['admin', 'superadmin'].includes(state.user.role)) {
-  root.innerHTML =
-    '<div class="login"><div class="login-card"><b>Sin permiso</b><p class="muted">Esta pantalla es solo para administradores.</p><a class="btn" href="/reception.html">Ir a recepción</a></div></div>';
-  throw new Error('forbidden');
-}
-if (state.user.role === 'superadmin') {
-  state.hotels = (await api('/super/hotels')).hotels;
-  const saved = localStorage.getItem('bo.hotel');
-  const pick = state.hotels.find((h) => h.id === saved) || state.hotels[0];
-  if (pick) {
-    setHotelOverride(pick.id);
-    state.hotel = pick;
-  }
-}
-
-const TABS = [
+/** [key, icon, label, onlyRole?], in order. reception.js shows them from the admin role up. */
+export const ADMIN_TABS = [
   ['hotel', 'hotel', 'Hotel'],
   ['services', 'room_service', 'Servicios'],
   ['actions', 'bolt', 'Acciones rápidas'],
@@ -76,38 +54,15 @@ const TABS = [
   ['rooms', 'qr_code', 'Habitaciones y QR'],
   ['users', 'group', 'Usuarios'],
   ['stats', 'monitoring', 'Estadísticas'],
-  ...(state.user.role === 'superadmin'
-    ? [['hotels', 'domain', 'Hoteles']]
-    : []),
+  ['hotels', 'domain', 'Hoteles', 'superadmin'],
 ];
 
-function shell() {
-  root.innerHTML = `
-    <header class="bar${state.hotels.length > 1 ? ' multi' : ''}">
-      <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Administración</div></div></div>
-      ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel?.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
-      <div class="me"><a class="btn sm" href="/reception.html">${icon('inbox')} Recepción</a><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
-      <nav class="tabs">${TABS.map(([k, ic, l]) => `<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}</button>`).join('')}</nav>
-    </header>
-    <main id="main"></main>`;
-  root
-    .querySelector('.tabs .on')
-    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
-    setHotelOverride(e.target.value);
-    localStorage.setItem('bo.hotel', e.target.value);
-    state.hotel = state.hotels.find((h) => h.id === e.target.value);
-    shell();
-    load();
-  });
-  bindAccount(root, state.user);
-  root.querySelectorAll('[data-tab]').forEach((b) =>
-    b.addEventListener('click', () => {
-      state.tab = b.dataset.tab;
-      shell();
-      load();
-    }),
-  );
+/** Render one configuration tab into #main for this user and hotel. */
+export function renderAdminTab(key, { user, hotel }) {
+  state.user = user;
+  state.hotel = hotel;
+  state.tab = key;
+  return load();
 }
 
 const main = () => document.getElementById('main');
@@ -741,6 +696,3 @@ async function renderHotels(m) {
     }),
   );
 }
-
-shell();
-load();

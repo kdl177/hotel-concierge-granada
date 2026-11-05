@@ -67,6 +67,7 @@ h4 { font: 700 10.5px/1.2 var(--font-ui); letter-spacing: 0.12em; text-transform
 .brand-title { font-size: 18px; margin: 0; line-height: 1.2; }
 .tabs { display: flex; gap: 2px; order: 3; flex: 1 0 100%; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin: 0 -12px; padding: 0 2px; }
 .tabs::-webkit-scrollbar { display: none; }
+.tabs-sep { flex: none; width: 1px; align-self: stretch; margin: 6px 6px; background: var(--hair-2); }
 .tabs button { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--ink-2); padding: 8px 10px 6px; border-radius: 0; font: 600 13px var(--font-ui); cursor: pointer; }
 .tabs button:hover { color: var(--ink); }
 .tabs button.on { color: var(--terra); border-bottom-color: var(--terra); }

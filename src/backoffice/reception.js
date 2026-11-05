@@ -1,4 +1,4 @@
-/** Reception screen: live request inbox, assignment, notes, history, stays. */
+/** The back-office: request inbox, chat and stays for every role; configuration tabs (admin.js) from admin up. */
 import {
   api,
   esc,
@@ -17,6 +17,7 @@ import {
   modal,
   setHotelOverride,
 } from './common.js';
+import { ADMIN_TABS, renderAdminTab } from './admin.js';
 
 const root = document.getElementById('app');
 const state = {
@@ -68,21 +69,50 @@ async function loadLabels() {
 }
 await loadLabels();
 
+// Tabs by role: everyone gets the inbox and the chat; stays from reception up; configuration from admin up.
+const TABS = [
+  ['inbox', 'inbox', 'Solicitudes'],
+  ['chats', 'forum', 'Chat'],
+  ...(state.user.role === 'staff' ? [] : [['stays', 'bed', 'Estancias']]),
+  ...(['admin', 'superadmin'].includes(state.user.role)
+    ? ADMIN_TABS.filter(([, , , only]) => !only || only === state.user.role)
+    : []),
+];
+const ADMIN_KEYS = new Set(ADMIN_TABS.map(([k]) => k));
+const tabFromHash = () => {
+  const k = location.hash.slice(1);
+  return TABS.some(([key]) => key === k) ? k : 'inbox';
+};
+state.tab = tabFromHash();
+/** Open a tab now; the hash keeps it in the URL (direct links, back button, reload). */
+function goTab(key) {
+  if (location.hash.slice(1) !== key) history.pushState(null, '', `#${key}`);
+  state.tab = key;
+  shell();
+  refresh();
+}
+// Back/forward and edits in the address bar.
+const syncTab = () => {
+  if (tabFromHash() === state.tab) return;
+  state.tab = tabFromHash();
+  shell();
+  refresh();
+};
+addEventListener('hashchange', syncTab);
+addEventListener('popstate', syncTab);
+
 function shell() {
   root.innerHTML = `
     <header class="bar${state.hotels.length > 1 ? ' multi' : ''}">
       <div class="brand">${icon('hotel')}<div><h1 class="brand-title">${esc(state.hotel?.name || 'Concierge')}</h1><div class="muted">Recepción</div></div></div>
       ${state.hotels.length > 1 ? `<select data-hotel class="sel" aria-label="Hotel">${state.hotels.map((h) => `<option value="${h.id}" ${h.id === state.hotel.id ? 'selected' : ''}>${esc(h.name)}</option>`).join('')}</select>` : ''}
-      <div class="me"><span>${esc(state.user.name || state.user.email)}</span>
-        ${['admin', 'superadmin'].includes(state.user.role) ? `<a class="btn sm" href="/admin.html">${icon('settings')} Admin</a>` : ''}
-        ${accountButton(state.user)}</div>
-      <nav class="tabs">
-        <button data-tab="inbox" class="${state.tab === 'inbox' ? 'on' : ''}">${icon('inbox')} Solicitudes <span class="pill" data-pending></span></button>
-        <button data-tab="chats" class="${state.tab === 'chats' ? 'on' : ''}">${icon('forum')} Chat <span class="pill" data-chat-unread>${state.chatUnread || ''}</span></button>
-        <button data-tab="stays" class="${state.tab === 'stays' ? 'on' : ''}">${icon('bed')} Estancias</button>
-      </nav>
+      <div class="me"><span>${esc(state.user.name || state.user.email)}</span><a class="btn sm" target="_blank" rel="noopener" href="/?h=${encodeURIComponent(state.hotel?.slug || 'default')}">${icon('open_in_new')} App</a>${accountButton(state.user)}</div>
+      <nav class="tabs">${TABS.map(([k, ic, l], i) => `${ADMIN_KEYS.has(k) && !ADMIN_KEYS.has(TABS[i - 1]?.[0]) ? '<span class="tabs-sep" aria-hidden="true"></span>' : ''}<button data-tab="${k}" class="${state.tab === k ? 'on' : ''}">${icon(ic)} ${l}${k === 'inbox' ? ' <span class="pill" data-pending></span>' : k === 'chats' ? ` <span class="pill" data-chat-unread>${state.chatUnread || ''}</span>` : ''}</button>`).join('')}</nav>
     </header>
     <main id="main"></main>`;
+  root
+    .querySelector('.tabs .on')
+    ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   root.querySelector('[data-hotel]')?.addEventListener('change', (e) => {
     setHotelOverride(e.target.value);
     localStorage.setItem('bo.hotel', e.target.value);
@@ -95,18 +125,16 @@ function shell() {
     });
   });
   bindAccount(root, state.user);
-  root.querySelectorAll('[data-tab]').forEach((b) =>
-    b.addEventListener('click', () => {
-      state.tab = b.dataset.tab;
-      shell();
-      refresh();
-    }),
-  );
+  root
+    .querySelectorAll('[data-tab]')
+    .forEach((b) => b.addEventListener('click', () => goTab(b.dataset.tab)));
   renderMain();
 }
 
 function renderMain() {
   const main = document.getElementById('main');
+  if (ADMIN_KEYS.has(state.tab))
+    return renderAdminTab(state.tab, { user: state.user, hotel: state.hotel });
   if (state.tab === 'stays') return renderStays(main);
   if (state.tab === 'chats') return renderChats(main);
   main.innerHTML = `
@@ -231,10 +259,8 @@ document.addEventListener(
   safe(async (e) => {
     const toChat = e.target.closest('[data-chat]');
     if (toChat) {
-      state.tab = 'chats';
       state.chatKey = toChat.dataset.chat;
-      shell();
-      return refresh();
+      return goTab('chats');
     }
     const card = e.target.closest('[data-id]');
     if (!card) return;
@@ -310,6 +336,7 @@ async function refreshNow() {
   const seq = ++refreshSeq;
   const view = `${state.tab}|${state.filter}|${state.q}`;
   await refreshChatList();
+  if (ADMIN_KEYS.has(state.tab)) return; // configuration tabs load on open, not every 5 s
   if (state.tab === 'stays') return refreshStays();
   if (state.tab === 'chats') return refreshChat();
   try {

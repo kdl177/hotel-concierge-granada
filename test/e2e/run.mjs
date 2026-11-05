@@ -108,7 +108,7 @@ try {
   const admin = await adminCtx.newPage();
   await admin.setViewport({ width: 1366, height: 900 });
   watch(admin, 'admin');
-  await admin.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  await admin.goto(`${BASE}/reception.html#hotel`, { waitUntil: 'networkidle2' });
   await admin.waitForSelector('input[name=email]');
   await axe(admin, 'login');
   await admin.type('input[name=email]', ADMIN.email);
@@ -176,6 +176,29 @@ try {
   await rec.click('button[type=submit]');
   await rec.waitForSelector('main#main');
   ok('reception inbox opens after its own password change');
+  // One back-office for every role: the tabs each role sees.
+  const recTabs = await rec.$$eval('.tabs [data-tab]', (b) => b.map((x) => x.dataset.tab));
+  if (recTabs.join() !== 'inbox,chats,stays') throw new Error(`reception tabs: ${recTabs.join()}`);
+  const adminTabs = await admin.$$eval('.tabs [data-tab]', (b) => b.map((x) => x.dataset.tab));
+  if (adminTabs.join() !== 'inbox,chats,stays,hotel,services,actions,pois,rooms,users,stats,hotels') throw new Error(`superadmin tabs: ${adminTabs.join()}`);
+  const staffMade = await admin.evaluate(async () => (await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Paco Personal', email: 'paco@luna.es', role: 'staff', password: 'Temporal12345' }) })).status);
+  if (staffMade !== 200 && staffMade !== 201) throw new Error(`staff user: HTTP ${staffMade}`);
+  const staff = await (await browser.createBrowserContext()).newPage();
+  watch(staff, 'staff');
+  await staff.goto(`${BASE}/reception.html#stays`, { waitUntil: 'networkidle2' }); // a tab this role does not have
+  await staff.type('input[name=email]', 'paco@luna.es');
+  await staff.type('input[name=password]', 'Temporal12345');
+  await staff.click('button[type=submit]');
+  await staff.waitForSelector('input[name=next]');
+  await staff.type('input[name=current]', 'Temporal12345');
+  await staff.type('input[name=next]', 'Personal2026ok');
+  await staff.type('input[name=again]', 'Personal2026ok');
+  await staff.click('button[type=submit]');
+  await staff.waitForSelector('.tabs [data-tab]');
+  const staffTabs = await staff.$$eval('.tabs [data-tab]', (b) => b.map((x) => x.dataset.tab + (x.classList.contains('on') ? '*' : '')));
+  if (staffTabs.join() !== 'inbox*,chats') throw new Error(`staff tabs: ${staffTabs.join()}`);
+  await staff.close();
+  ok('one back-office, tabs by role: staff inbox+chat, reception +stays, superadmin +8 configuration tabs', `#stays for staff fell back to the inbox`);
 
   // ---------- 3. Guest on a phone, identified by the room QR ----------
   const guestCtx = await browser.createBrowserContext();
@@ -200,6 +223,9 @@ try {
   await guest.waitForSelector('.cg-act[data-action=request]');
   ok('Alhambra detail with action buttons');
   await axe(guest, 'guest place');
+  // The texts checked below are Spanish: pick the language explicitly (the CI runner's browser starts in English).
+  await tap(guest, '[data-lang=es]');
+  await guest.waitForFunction(() => /A pie/.test(document.querySelector('[data-action="mode"][data-mode="walk"]')?.textContent || ''), { timeout: 20000 });
   // Walking directions in the guest's language, every step with distance and time (OSRM is external: skipped when it does not answer).
   const walkLi = await guest.waitForSelector('[data-role="route"] .cg-steps li', { timeout: 20000 }).catch(() => null);
   if (walkLi) {
@@ -283,7 +309,7 @@ try {
   await anon.click('button[type=submit]');
   await anon.waitForFunction(() => document.querySelector('.notice')?.textContent.includes('Admin'));
   ok('forgot password explains the no-SMTP path');
-  await admin.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  await admin.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
   await admin.waitForSelector('[data-account]');
   await admin.click('[data-account]');
   await admin.waitForSelector('.modal [data-signout-all]');
@@ -308,7 +334,7 @@ try {
   const adminPhone = await adminCtx.newPage();
   await adminPhone.setViewport(phone);
   watch(adminPhone, 'admin phone');
-  await adminPhone.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  await adminPhone.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
   for (const t of ['hotel', 'users', 'rooms', 'pois', 'stats']) {
     await adminPhone.$eval(`[data-tab=${t}]`, (b) => b.click());
     await settled(adminPhone);
@@ -389,7 +415,7 @@ try {
   const kbAdmin = await adminCtx.newPage();
   await kbAdmin.setViewport({ width: 1366, height: 900 });
   watch(kbAdmin, 'admin keyboard');
-  await kbAdmin.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+  await kbAdmin.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
   await kbAdmin.$eval('[data-tab=users]', (b) => b.click());
   await kbAdmin.waitForSelector('[data-new]');
   const adminStops = await tabPage(kbAdmin, 'admin users');
@@ -505,7 +531,9 @@ try {
     const r = await fetch(BASE + url);
     if (r.status !== want) throw new Error(`${url} → ${r.status}, expected ${want}`);
   }
-  ok('production publishes only the concierge surface');
+  const redirect = await (await fetch(`${BASE}/admin.html`)).text();
+  if (!/url=\/reception\.html/.test(redirect)) throw new Error('admin.html does not redirect to reception.html');
+  ok('production publishes only the concierge surface; admin.html redirects to reception.html');
 
   // ---------- 7. Superadmin with several hotels: the selector joins the header without breaking its Tab order ----------
   const made = await admin.evaluate(async () => (await fetch('/api/super/hotels', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'Hotel Prueba E2E', slug: 'hotel-prueba-e2e', city: 'Granada', lat: 37.1773, lon: -3.5986, adminEmail: 'admin@prueba-e2e.local', adminPassword: 'Prueba2026e2e' }) })).status);
@@ -514,7 +542,7 @@ try {
   watch(multi, 'admin two hotels');
   for (const vp of [phone, { width: 1366, height: 900 }]) {
     await multi.setViewport(vp);
-    await multi.goto(`${BASE}/admin.html`, { waitUntil: 'networkidle2' });
+    await multi.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
     await multi.waitForSelector('.bar [data-hotel]');
     await settled(multi);
     if (vp.isMobile) {

@@ -104,8 +104,7 @@ cat <<EOF
 ✓ Concierge is running.
 
   Guests (room QR codes point here):  https://$DOMAIN
-  Reception:                          https://$DOMAIN/reception.html
-  Admin:                              https://$DOMAIN/admin.html
+  Reception and admin (one app):      https://$DOMAIN/reception.html
 
   Admin login: $(getenv ADMIN_EMAIL)
 EOF
