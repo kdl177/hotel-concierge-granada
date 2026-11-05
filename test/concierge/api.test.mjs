@@ -1,5 +1,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { existsSync, readdirSync } from 'node:fs';
 import { startApp, client, superadmin, hotelUser, guestKey, STRONG } from './helpers.mjs';
 
 let app;
@@ -253,6 +255,23 @@ test('transit without timetables loaded says "not configured"', async () => {
   assert.equal(r.status, 200);
   assert.equal(r.data.configured, false);
   assert.equal((await client(app.base).post('/api/h/default/transit', { origin: { lat: 999, lon: 0 }, destination: {} })).status, 200, 'no feeds → no validation needed');
+});
+
+const gtfsDir = path.resolve('data/gtfs');
+const hasFeeds = existsSync(gtfsDir) && readdirSync(gtfsDir).some((f) => f.endsWith('.zip'));
+test('transit with timetables: bus to the Alhambra, and walkBetter only says whether walking beats it', { skip: !hasFeeds && 'no GTFS zips in data/gtfs' }, async () => {
+  const withFeeds = await startApp({ env: { CONCIERGE_GTFS_DIR: gtfsDir } });
+  try {
+    const r = await client(withFeeds.base).post('/api/h/default/transit', { origin: { lat: 37.17654, lon: -3.612782 }, destination: { lat: 37.1761, lon: -3.5881 }, destName: 'La Alhambra', at: '2026-10-05T08:00:00Z' });
+    assert.equal(r.status, 200);
+    assert.equal(r.data.configured, true);
+    assert.ok(r.data.routes.length >= 1, 'no bus itinerary although line 9 / C32 serve the Alhambra');
+    assert.ok(r.data.routes.every((x) => x.legs.some((l) => l.mode === 'TRANSIT')));
+    assert.equal(r.data.walkBetter, r.data.walkS < Math.min(...r.data.routes.map((x) => x.durationS)));
+    assert.equal(r.data.routes[0].legs.at(-1).instruction, 'La Alhambra');
+  } finally {
+    await withFeeds.close();
+  }
 });
 
 test('moderation: reception can block and unblock an abusive guest device', async () => {

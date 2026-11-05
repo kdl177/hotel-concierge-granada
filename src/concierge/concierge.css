@@ -265,6 +265,10 @@ h3::after, .cg-sec::after { content: ''; flex: 1; height: 1px; background: var(-
 .cg-walkbetter div { flex: 1; display: flex; flex-direction: column; font-size: 13.5px; }
 .cg-walkbetter span { color: var(--ink-3); font-size: 12.5px; }
 .cg-walkbetter .cg-mode { flex: none; border: 1px solid var(--hair-2); border-radius: 6px; }
+.cg-walknote { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; font-size: 12.5px; color: var(--ink-3); }
+.cg-walknote .msym { font-size: 18px; flex: none; }
+.cg-walknote span { flex: 1; }
+.cg-walknote .cg-mode { flex: none; border: 1px solid var(--hair-2); border-radius: 6px; font-size: 12px; }
 .cg-src { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 4px; font-size: 12px; color: var(--ink-3); }
 .cg-src-note { display: flex; gap: 6px; align-items: flex-start; margin: 10px 0 0; font-size: 12px; color: var(--ink-3); line-height: 1.4; }
 .cg-src-note .msym { font-size: 16px; flex: none; }

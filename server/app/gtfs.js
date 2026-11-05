@@ -550,19 +550,14 @@ export function plan(
       .map((l) => net.routes[net.trips[l.trip].route].short)
       .join('>');
     if (seen.has(sig)) continue;
-    // Transit saves effort even when it is a bit slower (hills, heat, luggage):
-    // only drop it for very short hops or when it is clearly slower than walking.
+    // The guest asked for bus/metro: offer it even when walking would be faster.
+    // Only an itinerary whose own walking already exceeds the direct walk is nonsense.
     const walkS = walkSecs(directWalk);
-    if (walkS <= 12 * 60 || r.total > walkS * 1.35) continue;
-    // …and it must actually spare the guest a good part of the walk.
     const walked = r.legs.reduce(
       (a, l) => a + (l.mode === 'WALK' ? l.secs : 0),
       0,
     );
-    if (walked > walkS * 0.7) continue;
-    // Not faster than walking? Then only a single, comfortable ride is worth offering.
-    const nRides = r.legs.filter((l) => l.mode === 'TRANSIT').length;
-    if (r.total >= walkS && (nRides > 1 || walked > walkS * 0.45)) continue;
+    if (walked >= walkS) continue;
     if (r.arrive > bestArrive + 20 * 60) continue; // much later than the best option
     seen.add(sig);
     out.push(r);
@@ -846,7 +841,10 @@ export function createTransit({
           source: 'gtfs',
           routes,
           walkS,
-          walkBetter: !routes.length && walkS <= 45 * 60,
+          // Walking beats the best itinerary: the app says so under the route, never instead of it.
+          walkBetter:
+            routes.length > 0 &&
+            walkS < Math.min(...routes.map((r) => r.durationS)),
         });
       },
     );

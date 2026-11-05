@@ -27,6 +27,7 @@ import {
   sendChat,
   fetchWeather,
   track,
+  walkSteps,
 } from './services.js';
 import { glyph } from '../design/icons.js';
 
@@ -1009,7 +1010,7 @@ export function createUi({ root, globe, config, room = null, kiosk = false }) {
   function renderSimpleRoute(box, r, mode, p) {
     clearInterval(state.tick);
     globe.removeMarkers('stop');
-    const steps = Array.isArray(r.steps) ? r.steps : [];
+    const steps = walkSteps(r.steps, { dest: p.title });
     box.innerHTML = `
       <div class="cg-tl-head">
         <div class="cg-tl-big">${esc(formatDuration(r.durationS, t))}</div>
@@ -1022,20 +1023,20 @@ export function createUi({ root, globe, config, room = null, kiosk = false }) {
               .slice(0, 40)
               .map(
                 (s, i) =>
-                  `<li data-action="guide-step" data-i="${i}">${esc(s.instruction || s.name || '')}${s.distanceM ? ` <span class="cg-muted">${esc(formatDistance(s.distanceM, t))}</span>` : ''}</li>`,
+                  `<li data-action="guide-step" data-i="${i}">${esc(s.instruction)}${s.distanceM ? ` <span class="cg-muted">${esc(formatDistance(s.distanceM, t))} · ${esc(formatDuration(s.durationS, t))}</span>` : ''}</li>`,
               )
               .join('')}</ol>`
           : ''
       }`;
     const geom = Array.isArray(r.geometry) ? r.geometry : [];
-    const pts = [
-      ...steps.map((s) => ({
-        lat: s.lat,
-        lon: s.lon,
-        text: s.instruction || s.name || '',
-      })),
-      { lat: p.lat, lon: p.lon, text: t('arrived') },
-    ];
+    const pts = steps.map((s) => ({
+      lat: s.lat,
+      lon: s.lon,
+      text: s.instruction,
+    }));
+    // OSRM ends with its own "arrive" step; add ours only when it is missing.
+    if (steps[steps.length - 1]?.type !== 'arrive')
+      pts.push({ lat: p.lat, lon: p.lon, text: t('arrived') });
     box._guide = pts.map((pt, i) => ({
       ...pt,
       kind: 'walk',
@@ -1060,15 +1061,11 @@ export function createUi({ root, globe, config, room = null, kiosk = false }) {
       return;
     }
     const routes = (data?.routes ?? []).slice(0, 4);
-    if (!routes.length && data?.walkBetter) {
-      box.innerHTML = `<div class="cg-walkbetter">${icon('directions_walk')}<div><b>${esc(t('walkBetter'))}</b><span>${esc(t('walkBetterSub', { n: Math.round(data.walkS / 60) }))}</span></div>
-        <button class="cg-mode on" data-action="mode" data-mode="walk">${esc(t('walk'))}</button></div>`;
-      globe.clearRoute();
-      globe.flyToBounds([HOTEL, p]);
-      return;
-    }
     if (!routes.length) {
-      box.innerHTML = `<p class="cg-muted">${esc(t('noTransit'))}</p>`;
+      // No line at all in the next hours, with or without a change: say so and offer the walk.
+      const n = Math.round((data?.walkS || 0) / 60);
+      box.innerHTML = `<div class="cg-walkbetter">${icon('directions_bus')}<div><b>${esc(t('noTransit'))}</b>${n ? `<span>${esc(t('orWalk', { n }))}</span>` : ''}</div>
+        <button class="cg-mode on" data-action="mode" data-mode="walk">${esc(t('walk'))}</button></div>`;
       globe.clearRoute();
       globe.flyToBounds([HOTEL, p]);
       return;
@@ -1094,7 +1091,7 @@ export function createUi({ root, globe, config, room = null, kiosk = false }) {
           <div class="cg-tl-big">${esc(countdown(r.departure, true))}</div>
           <div class="cg-tl-times">${esc(formatTime(r.departure, lang))} → ${esc(formatTime(r.arrival, lang))} · <b>${esc(formatDuration(r.durationS, t))}</b></div>
         </div>
-        ${r.leaveAt ? `<div class="cg-leave">${icon('door_open')} ${esc(t('leaveHotelAt', { t: formatTime(r.leaveAt, lang) }))}${data.walkS ? ` <span>· ${esc(t('orWalk', { n: Math.round(data.walkS / 60) }))}</span>` : ''}</div>` : ''}
+        ${r.leaveAt ? `<div class="cg-leave">${icon('door_open')} ${esc(t('leaveHotelAt', { t: formatTime(r.leaveAt, lang) }))}</div>` : ''}
         <button class="cg-btn" data-action="guide">${icon('navigation')} ${esc(t('guide'))}</button>
         ${data.source === 'gtfs' ? `<div class="cg-src"><span class="cg-seal official" title="${esc(t('officialHint'))}">${sealSvg()}${esc(t('badgeOfficial'))}</span><span>${esc(t('officialTimes'))}</span></div>` : ''}
         <ol class="cg-tl">
@@ -1117,7 +1114,8 @@ export function createUi({ root, globe, config, room = null, kiosk = false }) {
             )
             .join('')}
           <li class="cg-tl-item end"><span class="cg-tl-dot"></span><div><b>${esc(p.title)}</b><div class="cg-muted">${esc(formatTime(r.arrival, lang))}</div></div></li>
-        </ol>`;
+        </ol>
+        ${data.walkS ? `<div class="cg-walknote">${icon('directions_walk')}<span>${esc(t(data.walkS < r.durationS ? 'walkFaster' : 'orWalk', { n: Math.round(data.walkS / 60) }))}</span><button class="cg-mode" data-action="mode" data-mode="walk">${esc(t('walk'))}</button></div>` : ''}`;
       box._guide = [
         ...r.legs.map((l) => {
           const start = l.polyline?.[0];

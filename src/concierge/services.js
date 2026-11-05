@@ -1,5 +1,5 @@
 /** Network helpers: routing (walk / bike / transit) and place search. */
-import { L } from './i18n.js';
+import { L, stepText } from './i18n.js';
 
 /** Live hotel config (set by main.js after loading /api/h/:slug/config). */
 export const CTX = {
@@ -193,6 +193,34 @@ export function formatDuration(s, t) {
   return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')}`;
 }
 
+/** Walking steps as the guest reads them: hops of a few metres folded into the previous step, one sentence in the guest's language. */
+export function walkSteps(steps, { dest = '', lang } = {}) {
+  const out = [];
+  for (const s of Array.isArray(steps) ? steps : []) {
+    const prev = out[out.length - 1];
+    // A hop of a few metres, or "keep straight" on an unnamed stretch, is not a decision: fold it into the previous step.
+    const straightNoName =
+      (s.type === 'new name' || s.type === 'continue') &&
+      !s.name &&
+      (!s.modifier || s.modifier === 'straight');
+    if (
+      prev &&
+      s.type !== 'arrive' &&
+      ((s.distanceM || 0) < 10 || straightNoName)
+    ) {
+      prev.distanceM += s.distanceM || 0;
+      prev.durationS += s.durationS || 0;
+      continue;
+    }
+    out.push({
+      ...s,
+      distanceM: s.distanceM || 0,
+      durationS: s.durationS || 0,
+    });
+  }
+  return out.map((s) => ({ ...s, instruction: stepText(s, { lang, dest }) }));
+}
+
 export function formatTime(iso, lang) {
   if (!iso) return '';
   try {
@@ -344,7 +372,9 @@ function flush() {
     }).catch(() => {});
   }
 }
-addEventListener(
-  'visibilitychange',
-  () => document.visibilityState === 'hidden' && flush(),
-);
+// Not in Node (tests import this module).
+if (typeof addEventListener !== 'undefined')
+  addEventListener(
+    'visibilitychange',
+    () => document.visibilityState === 'hidden' && flush(),
+  );

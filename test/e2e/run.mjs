@@ -200,6 +200,37 @@ try {
   await guest.waitForSelector('.cg-act[data-action=request]');
   ok('Alhambra detail with action buttons');
   await axe(guest, 'guest place');
+  // Walking directions in the guest's language, every step with distance and time (OSRM is external: skipped when it does not answer).
+  const walkLi = await guest.waitForSelector('[data-role="route"] .cg-steps li', { timeout: 20000 }).catch(() => null);
+  if (walkLi) {
+    const checkSteps = async (first, leak) => {
+      const items = await guest.$$eval('[data-role="route"] .cg-steps li', (els) => els.map((e) => e.textContent.trim()));
+      if (!items[0].startsWith(first)) throw new Error(`walk steps: first step is "${items[0]}"`);
+      const bad = items.filter((x, i) => (i < items.length - 1 && !/(\d+ m|\d+\.\d km) · \d+ min$/.test(x)) || leak.test(x) || /undefined|NaN/.test(x));
+      if (bad.length) throw new Error(`walk steps: ${bad.slice(0, 3).join(' | ')}`);
+      return items.length;
+    };
+    const nSteps = await checkSteps('Salga del hotel', /\b(Turn|Continue|Head)\b/);
+    await tap(guest, '[data-lang=en]');
+    await guest.waitForFunction(() => document.querySelector('[data-role="route"] .cg-steps li')?.textContent.startsWith('Leave the hotel'), { timeout: 20000 });
+    await checkSteps('Leave the hotel', /\b(Gire|Siga|Salga)\b/);
+    await tap(guest, '[data-lang=es]');
+    await guest.waitForFunction(() => document.querySelector('[data-role="route"] .cg-steps li')?.textContent.startsWith('Salga del hotel'), { timeout: 20000 });
+    ok("walking directions read in the guest's language, each step with distance and time", `${nSteps} steps to the Alhambra`);
+  } else ok('walking directions skipped: the OSRM routing service did not answer');
+  // Bus is bus: transit mode shows a bus/metro itinerary even though walking is about as fast; walking is only a note under it.
+  await tap(guest, '[data-action="mode"][data-mode="transit"]');
+  if (existsSync(gtfs)) {
+    await guest.waitForSelector('[data-role="route"] .cg-tl-item.ride', { timeout: 20000 });
+    const note = await guest.$eval('[data-role="route"] .cg-walknote', (e) => e.textContent.trim()).catch(() => '');
+    if (!/a pie/i.test(note)) throw new Error(`transit: walking note missing under the itinerary: "${note}"`);
+    if (await guest.$('[data-role="route"] .cg-walkbetter')) throw new Error('transit mode replaced the itinerary with "better on foot"');
+    ok('transit to the Alhambra: bus itinerary shown, walking only as a note', note);
+  } else {
+    await guest.waitForFunction(() => /No hay bus|no configurados/.test(document.querySelector('[data-role="route"]')?.textContent || ''), { timeout: 20000 });
+    ok('transit without GTFS data on this machine: honest message, no itinerary invented');
+  }
+  await tap(guest, '[data-action="mode"][data-mode="walk"]');
   await tap(guest, '.cg-act[data-action=request]');
   await guest.waitForSelector('form[data-role=request-form] input[name=room]');
   const roomVal = await guest.$eval('form[data-role=request-form] input[name=room]', (e) => e.value);
@@ -217,6 +248,21 @@ try {
   await tap(guest, '[data-tab=tasks]');
   await guest.waitForSelector('.cg-req');
   await axe(guest, 'guest tasks');
+  // No line at all (Sierra Nevada is outside the Metro and city-bus timetables): say so and offer the walk.
+  if (existsSync(gtfs)) {
+    await tap(guest, '[data-tab=explore]');
+    await tap(guest, '[data-action="back"]'); // from the Alhambra back to the catalog
+    if (!(await guest.waitForSelector('.cg-card[data-id=sierra-nevada]', { timeout: 5000 }).catch(() => null)))
+      await tap(guest, '[data-action=filter-cat][data-cat=all]');
+    await tap(guest, '.cg-card[data-id=sierra-nevada]');
+    await guest.waitForSelector('[data-role="route"]');
+    await tap(guest, '[data-action="mode"][data-mode="transit"]');
+    await guest.waitForSelector('[data-role="route"] .cg-walkbetter', { timeout: 20000 });
+    const noLine = await guest.$eval('[data-role="route"] .cg-walkbetter', (e) => ({ txt: e.textContent.replace(/\s+/g, ' ').trim(), walkButton: !!e.querySelector('button[data-mode="walk"]') }));
+    if (!noLine.txt.includes('No hay bus ni metro') || !noLine.walkButton) throw new Error(`no-line message: ${JSON.stringify(noLine)}`);
+    ok('transit to Sierra Nevada: no line in the timetables, says so and offers the walk', noLine.txt);
+    await tap(guest, '[data-tab=tasks]');
+  }
 
   // ---------- 4. Reception confirms with a note → guest sees it ----------
   await rec.waitForFunction(() => document.querySelectorAll('.card.pending').length >= 1, { timeout: 20000 });

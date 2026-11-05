@@ -37,6 +37,21 @@ test('official timetables: hotel → Parque de las Ciencias by Metro/bus on a we
   assert.ok(r.durationS > 0 && r.durationS < 3600);
 });
 
+test('bus is bus: hotel → Alhambra gets bus itineraries although walking is about as fast', { skip: !hasFeeds && 'no GTFS zips in data/gtfs' }, async () => {
+  const transit = createTransit({ dataDir: path.resolve('data') });
+  const net = await transit.load();
+  const origin = { lat: 37.17654, lon: -3.612782 };
+  const destination = { lat: 37.1761, lon: -3.5881 };
+  const routes = plan(net, { origin, destination, at: new Date('2026-10-05T08:00:00Z') });
+  assert.ok(routes.length >= 1, 'no itinerary: the old "better on foot" filter is back');
+  const walkS = walkOnlySecs(origin, destination);
+  for (const r of routes) {
+    assert.ok(r.legs.some((l) => l.mode === 'TRANSIT'));
+    const walked = r.legs.filter((l) => l.mode === 'WALK').reduce((a, l) => a + l.durationS, 0);
+    assert.ok(walked < walkS, `itinerary walks ${walked}s, more than the ${walkS}s direct walk`);
+  }
+});
+
 test('weather shaping: rain flag, golden hour and hourly window', () => {
   const now = new Date('2026-10-04T16:00:00Z');
   const data = {

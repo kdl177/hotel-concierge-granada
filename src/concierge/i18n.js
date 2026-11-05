@@ -4,9 +4,6 @@ export const LANG_LABELS = { es: 'ES', en: 'EN', fr: 'FR', de: 'DE' };
 
 const STRINGS = {
   es: {
-    walkBetter: 'Mejor a pie',
-    walkBetterSub:
-      'Andando llegas en unos {n} min; el bus no te ahorra tiempo.',
     leaveHotelAt: 'Sal del hotel a las {t}',
     orWalk: 'a pie: {n} min',
     officialTimes: 'Horarios oficiales de Metro de Granada y bus urbano',
@@ -106,7 +103,8 @@ const STRINGS = {
     depart: 'Salida',
     arrive: 'Llegada',
     stops: 'paradas',
-    noTransit: 'No hay rutas de transporte público disponibles ahora mismo.',
+    noTransit: 'No hay bus ni metro para este trayecto ahora.',
+    walkFaster: 'A pie llega antes: {n} min',
     transitNeedsKey:
       'Horarios de transporte no configurados (falta clave de Google).',
     routeError: 'No se pudo calcular la ruta.',
@@ -173,8 +171,6 @@ const STRINGS = {
     tapPlace: 'Toque un lugar del mapa o de la lista',
   },
   en: {
-    walkBetter: 'Better on foot',
-    walkBetterSub: 'Walking takes about {n} min; the bus would not save time.',
     leaveHotelAt: 'Leave the hotel at {t}',
     orWalk: 'walking: {n} min',
     officialTimes: 'Official Granada Metro and city bus timetables',
@@ -273,7 +269,8 @@ const STRINGS = {
     depart: 'Depart',
     arrive: 'Arrive',
     stops: 'stops',
-    noTransit: 'No public transport routes available right now.',
+    noTransit: 'No bus or metro for this trip right now.',
+    walkFaster: 'Faster on foot: {n} min',
     transitNeedsKey: 'Transit times not configured (Google key missing).',
     routeError: 'Could not compute the route.',
     loading: 'Calculating…',
@@ -337,9 +334,6 @@ const STRINGS = {
     tapPlace: 'Tap a place on the map or in the list',
   },
   fr: {
-    walkBetter: 'Mieux à pied',
-    walkBetterSub:
-      'À pied, environ {n} min ; le bus ne ferait pas gagner de temps.',
     leaveHotelAt: 'Quittez l’hôtel à {t}',
     orWalk: 'à pied : {n} min',
     officialTimes: 'Horaires officiels du métro et des bus de Grenade',
@@ -440,7 +434,8 @@ const STRINGS = {
     depart: 'Départ',
     arrive: 'Arrivée',
     stops: 'arrêts',
-    noTransit: 'Aucun itinéraire en transports en commun pour le moment.',
+    noTransit: 'Pas de bus ni de métro pour ce trajet pour le moment.',
+    walkFaster: 'Plus rapide à pied : {n} min',
     transitNeedsKey: 'Horaires non configurés (clé Google manquante).',
     routeError: 'Impossible de calculer l’itinéraire.',
     loading: 'Calcul…',
@@ -505,8 +500,6 @@ const STRINGS = {
     tapPlace: 'Touchez un lieu sur la carte ou dans la liste',
   },
   de: {
-    walkBetter: 'Besser zu Fuß',
-    walkBetterSub: 'Zu Fuß etwa {n} Min.; der Bus spart keine Zeit.',
     leaveHotelAt: 'Hotel um {t} verlassen',
     orWalk: 'zu Fuß: {n} Min.',
     officialTimes: 'Offizielle Fahrpläne von Metro und Stadtbus Granada',
@@ -606,7 +599,8 @@ const STRINGS = {
     depart: 'Abfahrt',
     arrive: 'Ankunft',
     stops: 'Haltestellen',
-    noTransit: 'Derzeit keine ÖPNV-Verbindungen verfügbar.',
+    noTransit: 'Derzeit kein Bus und keine Metro für diese Strecke.',
+    walkFaster: 'Zu Fuß schneller: {n} Min.',
     transitNeedsKey: 'Fahrpläne nicht konfiguriert (Google-Schlüssel fehlt).',
     routeError: 'Route konnte nicht berechnet werden.',
     loading: 'Berechne…',
@@ -671,6 +665,216 @@ const STRINGS = {
   },
 };
 
+/** Turn-by-turn sentences for walking steps (OSRM maneuver type + modifier + road). */
+const STEP_TEXT = {
+  es: {
+    dir: {
+      left: 'a la izquierda',
+      right: 'a la derecha',
+      'slight left': 'ligeramente a la izquierda',
+      'slight right': 'ligeramente a la derecha',
+      'sharp left': 'bruscamente a la izquierda',
+      'sharp right': 'bruscamente a la derecha',
+      straight: 'recto',
+    },
+    onto: ' por {road}',
+    yourDestination: 'su destino',
+    depart: 'Salga del hotel',
+    departRoad: 'Salga del hotel por {road}',
+    arrive: 'Ha llegado a {dest}',
+    arriveSide: 'Ha llegado a {dest}, {dir}',
+    turn: 'Gire {dir}{onto}',
+    straight: 'Siga recto{onto}',
+    uturn: 'Dé media vuelta{onto}',
+    continue: 'Siga {dir}{onto}',
+    newName: 'Continúe{onto}',
+    endOfRoad: 'Al final de la calle, gire {dir}{onto}',
+    endOfRoadStraight: 'Al final de la calle, continúe{onto}',
+    fork: 'En la bifurcación, manténgase {dir}{onto}',
+    forkStraight: 'Continúe en la bifurcación{onto}',
+    merge: 'Incorpórese {dir}{onto}',
+    onRamp: 'Tome la rampa {dir}{onto}',
+    offRamp: 'Tome la salida {dir}{onto}',
+    roundabout: 'En la rotonda, tome la {n} salida{onto}',
+    roundaboutEnter: 'Entre en la rotonda{onto}',
+    roundaboutTurn: 'En la rotonda, gire {dir}{onto}',
+    exitRoundabout: 'Salga de la rotonda{onto}',
+    lane: 'Manténgase {dir}{onto}',
+  },
+  en: {
+    dir: {
+      left: 'left',
+      right: 'right',
+      'slight left': 'slightly left',
+      'slight right': 'slightly right',
+      'sharp left': 'sharp left',
+      'sharp right': 'sharp right',
+      straight: 'straight',
+    },
+    onto: ' onto {road}',
+    yourDestination: 'your destination',
+    depart: 'Leave the hotel',
+    departRoad: 'Leave the hotel along {road}',
+    arrive: 'You have arrived at {dest}',
+    arriveSide: 'You have arrived at {dest}, on the {dir}',
+    turn: 'Turn {dir}{onto}',
+    straight: 'Continue straight{onto}',
+    uturn: 'Make a U-turn{onto}',
+    continue: 'Continue {dir}{onto}',
+    newName: 'Continue{onto}',
+    endOfRoad: 'At the end of the road, turn {dir}{onto}',
+    endOfRoadStraight: 'At the end of the road, continue{onto}',
+    fork: 'Keep {dir} at the fork{onto}',
+    forkStraight: 'Continue at the fork{onto}',
+    merge: 'Merge {dir}{onto}',
+    onRamp: 'Take the ramp on the {dir}{onto}',
+    offRamp: 'Take the exit on the {dir}{onto}',
+    roundabout: 'At the roundabout, take the {n} exit{onto}',
+    roundaboutEnter: 'Enter the roundabout{onto}',
+    roundaboutTurn: 'At the roundabout, turn {dir}{onto}',
+    exitRoundabout: 'Exit the roundabout{onto}',
+    lane: 'Keep {dir}{onto}',
+  },
+  fr: {
+    dir: {
+      left: 'à gauche',
+      right: 'à droite',
+      'slight left': 'légèrement à gauche',
+      'slight right': 'légèrement à droite',
+      'sharp left': 'franchement à gauche',
+      'sharp right': 'franchement à droite',
+      straight: 'tout droit',
+    },
+    onto: ' sur {road}',
+    yourDestination: 'votre destination',
+    depart: 'Quittez l’hôtel',
+    departRoad: 'Quittez l’hôtel par {road}',
+    arrive: 'Vous êtes arrivé à {dest}',
+    arriveSide: 'Vous êtes arrivé à {dest}, {dir}',
+    turn: 'Tournez {dir}{onto}',
+    straight: 'Continuez tout droit{onto}',
+    uturn: 'Faites demi-tour{onto}',
+    continue: 'Continuez {dir}{onto}',
+    newName: 'Continuez{onto}',
+    endOfRoad: 'Au bout de la rue, tournez {dir}{onto}',
+    endOfRoadStraight: 'Au bout de la rue, continuez{onto}',
+    fork: 'À la bifurcation, restez {dir}{onto}',
+    forkStraight: 'Continuez à la bifurcation{onto}',
+    merge: 'Insérez-vous {dir}{onto}',
+    onRamp: 'Prenez la bretelle {dir}{onto}',
+    offRamp: 'Prenez la sortie {dir}{onto}',
+    roundabout: 'Au rond-point, prenez la {n} sortie{onto}',
+    roundaboutEnter: 'Entrez dans le rond-point{onto}',
+    roundaboutTurn: 'Au rond-point, tournez {dir}{onto}',
+    exitRoundabout: 'Sortez du rond-point{onto}',
+    lane: 'Restez {dir}{onto}',
+  },
+  de: {
+    dir: {
+      left: 'links',
+      right: 'rechts',
+      'slight left': 'leicht links',
+      'slight right': 'leicht rechts',
+      'sharp left': 'scharf links',
+      'sharp right': 'scharf rechts',
+      straight: 'geradeaus',
+    },
+    onto: ' auf {road}',
+    yourDestination: 'Ihrem Ziel',
+    depart: 'Verlassen Sie das Hotel',
+    departRoad: 'Verlassen Sie das Hotel über {road}',
+    arrive: 'Sie haben {dest} erreicht',
+    arriveSide: 'Sie haben {dest} erreicht, {dir}',
+    turn: 'Biegen Sie {dir} ab{onto}',
+    straight: 'Weiter geradeaus{onto}',
+    uturn: 'Wenden Sie{onto}',
+    continue: 'Weiter {dir}{onto}',
+    newName: 'Weiter{onto}',
+    endOfRoad: 'Am Ende der Straße {dir} abbiegen{onto}',
+    endOfRoadStraight: 'Am Ende der Straße weiter{onto}',
+    fork: 'An der Gabelung {dir} halten{onto}',
+    forkStraight: 'An der Gabelung weiter{onto}',
+    merge: 'Fädeln Sie sich {dir} ein{onto}',
+    onRamp: 'Nehmen Sie die Auffahrt {dir}{onto}',
+    offRamp: 'Nehmen Sie die Ausfahrt {dir}{onto}',
+    roundabout: 'Im Kreisverkehr die {n} Ausfahrt nehmen{onto}',
+    roundaboutEnter: 'In den Kreisverkehr einfahren{onto}',
+    roundaboutTurn: 'Im Kreisverkehr {dir} abbiegen{onto}',
+    exitRoundabout: 'Kreisverkehr verlassen{onto}',
+    lane: 'Halten Sie sich {dir}{onto}',
+  },
+};
+const ORDINAL = {
+  es: (n) => `${n}.ª`,
+  en: (n) =>
+    `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : { 1: 'st', 2: 'nd', 3: 'rd' }[n % 10] || 'th'}`,
+  fr: (n) => (n === 1 ? '1re' : `${n}e`),
+  de: (n) => `${n}.`,
+};
+
+/** One sentence, in the guest's language, for a walking step from /api/route (type, modifier, exit, name, ref). */
+export function stepText(step, { lang = current, dest = '' } = {}) {
+  const S = STEP_TEXT[lang] || STEP_TEXT.es;
+  const type = String(step?.type || '').toLowerCase();
+  const modifier = String(step?.modifier || '').toLowerCase();
+  const name = String(step?.name || '').trim();
+  const ref = String(step?.ref || '').trim();
+  const road =
+    name && ref && !name.includes(ref) ? `${name} (${ref})` : name || ref;
+  const onto = road ? S.onto.replace('{road}', road) : '';
+  const dir = S.dir[modifier] || '';
+  const side = modifier === 'left' || modifier === 'right' ? dir : '';
+  const fill = (key, vars = {}) =>
+    S[key].replace(/\{(\w+)\}/g, (_, k) =>
+      k === 'onto' ? onto : k === 'dir' ? dir : (vars[k] ?? ''),
+    );
+  switch (type) {
+    case 'depart':
+      return road ? fill('departRoad', { road }) : S.depart;
+    case 'arrive': {
+      const d = dest || S.yourDestination;
+      return side
+        ? S.arriveSide.replace('{dest}', d).replace('{dir}', side)
+        : S.arrive.replace('{dest}', d);
+    }
+    case 'turn':
+      if (modifier === 'uturn') return fill('uturn');
+      if (modifier === 'straight' || !dir) return fill('straight');
+      return fill('turn');
+    case 'new name':
+      return road ? fill('newName') : fill('straight');
+    case 'continue':
+      if (modifier === 'uturn') return fill('uturn');
+      return dir && dir !== S.dir.straight
+        ? fill('continue')
+        : fill('straight');
+    case 'end of road':
+      return dir ? fill('endOfRoad') : fill('endOfRoadStraight');
+    case 'fork':
+      return dir ? fill('fork') : fill('forkStraight');
+    case 'merge':
+      return dir ? fill('merge') : fill('newName');
+    case 'on ramp':
+      return side ? fill('onRamp') : fill('newName');
+    case 'off ramp':
+      return side ? fill('offRamp') : fill('newName');
+    case 'roundabout':
+    case 'rotary':
+      return Number.isInteger(step?.exit) && step.exit > 0
+        ? fill('roundabout', { n: (ORDINAL[lang] || ORDINAL.es)(step.exit) })
+        : fill('roundaboutEnter');
+    case 'roundabout turn':
+      return dir ? fill('roundaboutTurn') : fill('newName');
+    case 'exit roundabout':
+    case 'exit rotary':
+      return fill('exitRoundabout');
+    case 'use lane':
+      return dir ? fill('lane') : fill('newName');
+    default:
+      return road ? fill('newName') : fill('straight');
+  }
+}
+
 let current = detectLanguage();
 
 export function detectLanguage() {
@@ -692,7 +896,7 @@ export function setLang(lang) {
   try {
     localStorage.setItem('concierge.lang', lang);
   } catch {}
-  document.documentElement.lang = lang;
+  if (typeof document !== 'undefined') document.documentElement.lang = lang;
 }
 
 /** UI string by key, with {placeholders}. */
