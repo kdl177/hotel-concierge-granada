@@ -6,8 +6,8 @@ App de orientación para huéspedes construida sobre God's Eye View: mapa 3D, qu
 | URL | Para quién |
 |---|---|
 | `/?h=<slug>` | Huésped (móvil vía QR o kiosko). Sin `h` usa el primer hotel. `&r=<token>` identifica la habitación. |
-| `/reception.html` | Recepción: bandeja de solicitudes en vivo, asignación, notas, historial, check-in/out. |
-| `/admin.html` | Administración del hotel: datos, servicios, acciones rápidas, lugares, habitaciones + QR, usuarios. Superadmin: hoteles. |
+| `/reception.html` | El back-office, único para todos los roles. Pestañas según el rol: personal → Solicitudes y Chat; recepción → + Estancias; admin → + Hotel, Servicios, Acciones rápidas, Lugares, Habitaciones y QR, Usuarios, Estadísticas; superadmin → + Hoteles. La pestaña va en la URL (`#users`, `#hotel`…). |
+| `/admin.html` | Solo redirige a `/reception.html#hotel` (enlaces antiguos). |
 | `/console.html` | Consola original de God's Eye View: siempre en `npm run dev`; en producción solo con `CONCIERGE_CONSOLE=1`. |
 
 ## Arrancar en local
@@ -19,7 +19,7 @@ npm start          # producción: build + servidor Node
 Primer arranque: crea `data/concierge.sqlite` con el Gran Hotel Luna de Granada y el superadmin `admin@hotel.local`.
 - En desarrollo la contraseña inicial es `admin1234`; en producción (sin `ADMIN_PASSWORD`) se genera una aleatoria que aparece **una vez** en el log.
 - En ambos casos el primer acceso **obliga a cambiarla** (mínimo 10 caracteres, letras y números).
-- ¿Contraseña perdida? Con `SMTP_URL`: enlace "¿Has olvidado la contraseña?". Sin correo: otro admin la restablece en Admin → Usuarios, o desde el servidor `npm run reset-password -- correo@hotel.es`.
+- ¿Contraseña perdida? Con `SMTP_URL`: enlace "¿Has olvidado la contraseña?". Sin correo: otro admin la restablece en Recepción → Usuarios, o desde el servidor `npm run reset-password -- correo@hotel.es`.
 
 ## Pruebas
 ```
@@ -76,7 +76,7 @@ Claves opcionales (Google Routes/Places, Cesium ion, SMTP, webhook): edita `/opt
 Huésped (app) → `POST /api/h/:slug/requests` → SQLite → recepción la ve al instante (pitido), la asigna, confirma y añade nota → el huésped ve el estado en "Mis solicitudes". Cada cambio dispara el webhook del hotel (Admin → Hotel) y el global.
 
 ## Modo kiosko (pantalla del lobby)
-Abre `/?h=<slug>&kiosk=1` a pantalla completa en la pantalla táctil del lobby (el enlace está en Admin → Hotel → "Pantalla de kiosko"). Texto y botones más grandes, sin zoom ni selección. Tras 120 s sin tocar (`&idle=300` para cambiarlo) muestra "Toca para empezar" con el hotel y la hora, orbita despacio sobre el hotel y **olvida todo lo del huésped anterior** (plan, solicitudes, chat, idioma). En el inicio y en cada lugar aparece un QR para llevarse la guía (o ese lugar) al móvil: `/api/h/<slug>/qr.svg?p=<lugar>`, que abre `/?h=<slug>&p=<lugar>`.
+Abre `/?h=<slug>&kiosk=1` a pantalla completa en la pantalla táctil del lobby (el enlace está en Recepción → Hotel → "Pantalla de kiosko"). Texto y botones más grandes, sin zoom ni selección. Tras 120 s sin tocar (`&idle=300` para cambiarlo) muestra "Toca para empezar" con el hotel y la hora, orbita despacio sobre el hotel y **olvida todo lo del huésped anterior** (plan, solicitudes, chat, idioma). En el inicio y en cada lugar aparece un QR para llevarse la guía (o ese lugar) al móvil: `/api/h/<slug>/qr.svg?p=<lugar>`, que abre `/?h=<slug>&p=<lugar>`.
 
 ## Fotos de los lugares
 `npm run photos:fetch` descarga una foto libre (Wikimedia Commons) para cada lugar del hotel y guarda su crédito (autor · licencia), que la app muestra bajo la foto como exige la licencia. Necesita internet; se puede repetir con `--force` para renovarlas. Desde Admin → Lugares se puede sustituir cualquiera por una foto propia (y editar el crédito).

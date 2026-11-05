@@ -26,6 +26,7 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 - Estados de carga, vacío y error con botón "Reintentar" en el panel.
 - Selector de iconos con vista previa.
 - Usuarios con estado (activo / contraseña temporal) y último acceso.
+- Un solo back-office (`reception.html`) con las pestañas según el rol: personal, recepción, admin y superadmin (D-24). `admin.html` redirige.
 - Mensajes de error traducidos.
 
 **Diseño "Cuaderno del conserje"** (sustituye al primer diseño "Nazarí", D-13 y D-14)
@@ -46,8 +47,8 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 **Actual (5 nov 2026, Windows 11, Node 24.16):**
 | Suite | Resultado |
 |---|---|
-| `npm run test:concierge` | **66/66 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |
-| `npm run build && npm run test:e2e:concierge` | **46/46 ✅** (incluye Recepción y Admin a 375 y 768 px, su uso solo con teclado, un superadmin con dos hoteles, y las rutas: pasos a pie en es/en, bus a la Alhambra, Sierra Nevada sin línea), 0 errores de consola, 0 fallos serios de accesibilidad |
+| `npm run test:concierge` | **67/67 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |
+| `npm run build && npm run test:e2e:concierge` | **47/47 ✅** (incluye el back-office a 375 y 768 px, su uso solo con teclado, las pestañas de cada rol, un superadmin con dos hoteles, y las rutas: pasos a pie en es/en, bus a la Alhambra, Sierra Nevada sin línea), 0 errores de consola, 0 fallos serios de accesibilidad |
 | CI (GitHub Actions) | Ejecuta también `test:concierge` desde el 28 oct (D-17) y el E2E completo desde el 30 oct (D-19) |
 
 **Primera entrega (7 oct 2026, entorno de pruebas Linux, Node 22):**
@@ -62,7 +63,7 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 En PowerShell, dentro de `hotel-concierge-rome`:
 ```
 npm install
-npm run dev                 # http://localhost:4180  (admin: http://localhost:4180/admin.html)
+npm run dev                 # http://localhost:4180  (back-office: http://localhost:4180/reception.html)
 ```
 Producción:
 ```

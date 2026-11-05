@@ -7,7 +7,7 @@ Concierge digital para huéspedes del **Gran Hotel Luna de Granada**: qué hacer
 
 ```bash
 npm install
-npm run dev     # http://localhost:4180 · recepción /reception.html · admin /admin.html
+npm run dev     # http://localhost:4180 · back-office (recepción y administración) /reception.html
 ```
 
 Construido sobre [God's Eye View](https://github.com/bilawalsidhu/gods-eye-view) (licencia MIT, se conserva). Debajo sigue el README original del proyecto base.

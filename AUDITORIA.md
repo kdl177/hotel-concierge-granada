@@ -189,3 +189,15 @@ Reproducido contra el servidor de desarrollo con los horarios reales de `data/gt
 Los 15 primeros pasos al salir del hotel siguen sin nombre de calle («Gire a la derecha, 109 m»): OSM no tiene nombre para esos caminos y no se inventa.
 
 **Pruebas:** `walk-steps.test.mjs` (9 casos) comprueba, con las dos rutas reales guardadas en `test/concierge/fixtures/`, que cada paso tiene frase en los 4 idiomas sin restos de otro idioma ni «undefined», distancia y tiempo legibles, y que los saltos cortos se funden sin perder distancia; sin el plegado fallan 8. `units.test.mjs` exige itinerarios en bus a la Alhambra con los horarios reales (se omite sin GTFS). El E2E añade 3 comprobaciones (pasos a pie en es y en; bus a la Alhambra con la nota de «a pie»; Sierra Nevada sin línea); sin el cambio en `plan()` falla (`.cg-tl-item.ride`). Resultado: 46/46; `test:concierge` 66/66 (2 omitidas).
+
+*CI de `7fec1f6`:* el job E2E falló (`first step is "Leave the hotel"`): el Chrome del runner de Ubuntu arranca en inglés aunque se le pase `--lang=es-ES`, y la app del huésped toma el idioma del navegador. En local no se vio porque Windows está en español. Es un fallo de la prueba: ahora elige el español en la app antes de leer textos (se corrige en la subida siguiente).
+
+## Solo Recepción (5 nov 2026)
+
+Admin y Recepción pasan a ser una sola app, `reception.html`, con las pestañas según el rol (D-24). Al hacerlo salió un fallo real:
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-41 | El rol Personal veía la pestaña Estancias y, al abrirla, el servidor respondía 403 (`/staff/stays` exige recepción o superior): una pestaña que solo daba error | ✅ Las pestañas se montan por rol: Personal → Solicitudes y Chat; Recepción → + Estancias; Admin → + las 7 de configuración; Superadmin → + Hoteles. Un enlace a una pestaña que el rol no tiene cae en Solicitudes |
+
+**Pruebas:** el E2E recorre las pestañas de un superadmin (11), una recepcionista (3) y un empleado nuevo de rol Personal (2, con `#stays` en la URL), y comprueba que `admin.html` redirige a `reception.html`. Todas las comprobaciones anteriores de Admin (teclado, móvil, dos hoteles, diálogos) corren ahora sobre `reception.html`. Resultado: 47/47; `test:concierge` 67/67 (2 omitidas).
