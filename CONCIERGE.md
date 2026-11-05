@@ -95,4 +95,4 @@ También a mano: `npm run gtfs:update` (misma lógica, desde la línea de comand
 
 **Sin clave:** descarga el .zip de cada operador en NAP (Granada: bus urbano fichero 1367, Metro fichero 1370), déjalo sin descomprimir en `data/gtfs/` (en Docker se monta desde `./data/gtfs`) y pulsa **Recargar horarios** en Admin.
 
-El planificador combina bus y metro con hasta un transbordo, calcula el paseo a la parada y avisa de "Mejor a pie" cuando el transporte no compensa. Si no hay horarios cargados y existe `GOOGLE_MAPS_SERVER_API_KEY`, usa Google Routes como alternativa.
+El planificador combina bus y metro con hasta un transbordo, calcula el paseo a la parada y añade una nota de «a pie: n min» bajo el itinerario (o «A pie llega antes» si andar gana). Bus es bus: el modo transporte nunca sustituye el itinerario por «mejor a pie»; si no hay línea en las próximas 3 h lo dice y ofrece andar. Las indicaciones a pie se redactan en el cliente en los 4 idiomas (D-23). El planificador no compensa. Si no hay horarios cargados y existe `GOOGLE_MAPS_SERVER_API_KEY`, usa Google Routes como alternativa.

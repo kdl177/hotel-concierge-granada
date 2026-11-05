@@ -177,3 +177,15 @@ Sin hallazgos: el modal (foco inicial en el primer campo, Tab y Mayús+Tab dan l
 
 **Sin tocar código del hotel:** el E2E usa solo el Chrome instalado en Windows si `E2E_CHROME` no está definido (P-15), y el CI pasa a `actions/setup-node` 7.1.0, fijado por SHA (P-16).
 
+## Rutas: bus es bus y pasos a pie (5 nov 2026)
+
+Reproducido contra el servidor de desarrollo con los horarios reales de `data/gtfs` y el OSRM público.
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-39 | Modo transporte hotel → Alhambra: 0 rutas y «Mejor a pie» (35 min andando). `plan()` descartaba toda ruta que no compitiera con andar (`walkS <= 12 min`, `total > walkS × 1,35`, `walked > 70 %`…), aunque hay bus (línea 9, C32, C35). Hotel → Sierra Nevada: 0 rutas y un «No hay rutas de transporte público ahora mismo» sin salida | ✅ `plan()` solo descarta itinerarios cuyo propio paseo ya supera el trayecto andando directo; el resto se ordena por comodidad como antes. Alhambra: 3 itinerarios (9; 9+C32; 9+C35). Si no hay línea (Sierra Nevada no está en Metro ni bus urbano): «No hay bus ni metro para este trayecto ahora» con botón «A pie: n min». Andar más rápido que el bus se dice en una nota pequeña bajo la ruta («A pie llega antes: n min»), nunca en su lugar. El radio de paradas (900 m) y la ventana (3 h) no hacían falta ampliarlos: a 1200 m entran itinerarios peores (19 min andando + bus) |
+| A-40 | Rutas a pie hotel → Mirador de San Nicolás (35 pasos) y hotel → Catedral (29): todas las indicaciones en inglés en los 4 idiomas («Head out», «Turn right», «At the end of the road, turn left onto Calle San Jerónimo»); 5 micro-pasos de 2–9 m («Turn right 2 m»); sin tiempo por paso. No había «undefined», números sin unidad ni pasos duplicados; los nombres de calle son los de OSM, correctos | ✅ Las frases se componen en el cliente a partir del tipo de maniobra, el giro y la calle, en es/en/fr/de (`stepText`, 20 plantillas por idioma). Los saltos de menos de 10 m y los tramos «siga recto» sin nombre se funden con el paso anterior (35 → 28 y 29 → 24 pasos, sin perder distancia). Cada paso muestra distancia y tiempo. El paso final dice «Ha llegado a {lugar}» y ya no se duplica con el «Ha llegado» de la guía |
+
+Los 15 primeros pasos al salir del hotel siguen sin nombre de calle («Gire a la derecha, 109 m»): OSM no tiene nombre para esos caminos y no se inventa.
+
+**Pruebas:** `walk-steps.test.mjs` (9 casos) comprueba, con las dos rutas reales guardadas en `test/concierge/fixtures/`, que cada paso tiene frase en los 4 idiomas sin restos de otro idioma ni «undefined», distancia y tiempo legibles, y que los saltos cortos se funden sin perder distancia; sin el plegado fallan 8. `units.test.mjs` exige itinerarios en bus a la Alhambra con los horarios reales (se omite sin GTFS). El E2E añade 3 comprobaciones (pasos a pie en es y en; bus a la Alhambra con la nota de «a pie»; Sierra Nevada sin línea); sin el cambio en `plan()` falla (`.cg-tl-item.ride`). Resultado: 46/46; `test:concierge` 66/66 (2 omitidas).
