@@ -39,7 +39,8 @@ test('install.sh (dry run) writes a complete production .env and prints the one-
     assert.ok(e.CONCIERGE_SECRET.length >= 48, 'long random secret');
     assert.ok(e.ADMIN_PASSWORD.length >= 12, 'random admin password');
     assert.match(out, new RegExp(`Temporary password .*: ${e.ADMIN_PASSWORD}`));
-    assert.match(out, /https:\/\/concierge\.hotel\.com\/admin\.html/);
+    assert.match(out, /https:\/\/concierge\.hotel\.com\/reception\.html/);
+    assert.doesNotMatch(out, /admin\.html/, 'admin.html is a redirect now, not a page to announce');
     assert.equal(statSync(path.join(dir, '.env')).mode & 0o777, 0o600, '.env is private');
     assert.doesNotMatch(out, /docker compose up -d --build\n(?!.*dry-run)/, 'no real docker call in dry run');
   } finally {
