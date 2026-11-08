@@ -65,7 +65,7 @@
     "express": "^5.2.1",
     "hls.js": "^1.7.3",
     "mgrs": "^2.1.0",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.4.0",
     "pbf": "^5.1.2",
     "qrcode": "^1.5.4",
     "satellite.js": "^6.0.2"
