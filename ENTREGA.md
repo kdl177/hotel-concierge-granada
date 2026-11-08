@@ -44,11 +44,13 @@ Ver `AUDITORIA.md`: 24 hallazgos iniciales (3 críticos, 7 altos) y la 2ª audit
 
 ## 3. Informe de pruebas
 
-**Actual (5 nov 2026, Windows 11, Node 24.16):**
+**Actual (8 nov 2026, Windows 11, Node 24.16):**
 | Suite | Resultado |
 |---|---|
 | `npm run test:concierge` | **67/67 ✅** y 2 omitidas (`install.sh` necesita bash; en el CI de Ubuntu sí se ejecutan) |
 | `npm run build && npm run test:e2e:concierge` | **47/47 ✅** (incluye el back-office a 375 y 768 px, su uso solo con teclado, las pestañas de cada rol, un superadmin con dos hoteles, y las rutas: pasos a pie en es/en, bus a la Alhambra, Sierra Nevada sin línea), 0 errores de consola, 0 fallos serios de accesibilidad |
+| `npm test` (suite de God's Eye View) | **5055/5055 ✅**, 10 omitidas por diseño (tras actualizar dependencias el 8 nov) |
+| `npm audit` | **0 vulnerabilidades** en producción y en desarrollo (8 nov; antes 4 y 11) |
 | CI (GitHub Actions) | Ejecuta también `test:concierge` desde el 28 oct (D-17) y el E2E completo desde el 30 oct (D-19) |
 
 **Primera entrega (7 oct 2026, entorno de pruebas Linux, Node 22):**

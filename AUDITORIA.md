@@ -201,3 +201,10 @@ Admin y Recepción pasan a ser una sola app, `reception.html`, con las pestañas
 | A-41 | El rol Personal veía la pestaña Estancias y, al abrirla, el servidor respondía 403 (`/staff/stays` exige recepción o superior): una pestaña que solo daba error | ✅ Las pestañas se montan por rol: Personal → Solicitudes y Chat; Recepción → + Estancias; Admin → + las 7 de configuración; Superadmin → + Hoteles. Un enlace a una pestaña que el rol no tiene cae en Solicitudes |
 
 **Pruebas:** el E2E recorre las pestañas de un superadmin (11), una recepcionista (3) y un empleado nuevo de rol Personal (2, con `#stays` en la URL), y comprueba que `admin.html` redirige a `reception.html`. Todas las comprobaciones anteriores de Admin (teclado, móvil, dos hoteles, diálogos) corren ahora sobre `reception.html`. Resultado: 47/47; `test:concierge` 67/67 (2 omitidas).
+
+## Anillo de foco recortado y dependencias (8 nov 2026)
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-42 | El anillo de foco de las pestañas (11 en el superadmin) y de las conversaciones de la lista del chat se dibujaba fuera de la caja y las tiras con scroll lo recortaban: sobre «Hotel» solo se veía una línea vertical. El E2E lo daba por bueno porque miraba la regla CSS, no la geometría (visto en la revisión visual del 5 nov) | ✅ Anillo interior (`inset`) en `.tabs button` y `.chat-item`. El E2E mide ahora si el `box-shadow` cabe dentro del contenedor con scroll más cercano; sin el arreglo falla en las 11 pestañas y en la lista del chat. El recorrido con teclado cubre también la pestaña Chat |
+| A-43 | `npm audit`: 4 vulnerabilidades en dependencias de producción (DOMPurify crítica, vía Cesium; body-parser y nodemailer altas; qs moderada) y 11 contando desarrollo (puppeteer, vite, sharp, zod…) | ✅ `npm audit fix` (cambios dentro de rango: 21 paquetes) y `nodemailer` 7 → 10.4.0, que es salto mayor (D-25). `npm audit`: 0 en producción y 0 en total. Suites tras el cambio: `test:concierge` 67/67, E2E 47/47, `npm test` de God's Eye View 5055/5055 (10 omitidas) |
