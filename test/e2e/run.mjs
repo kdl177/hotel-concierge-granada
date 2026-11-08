@@ -391,6 +391,19 @@ try {
       seen: r.width > 0 && r.bottom > 0 && r.top < innerHeight,
       inBar: !!e.closest('.bar'),
       inModal: !!e.closest('.modal'),
+      // A ring drawn outside the box (box-shadow spread) is cut off by a scrolling ancestor unless it fits inside it.
+      clipped: (() => {
+        const sh = getComputedStyle(e).boxShadow;
+        if (e === document.body || sh === 'none' || /inset/.test(sh)) return false;
+        const spread = Math.max(0, ...(sh.match(/-?[\d.]+px/g) || []).map(parseFloat));
+        for (let p = e.parentElement; p && p !== document.body; p = p.parentElement) {
+          const o = getComputedStyle(p);
+          if (o.overflowX === 'visible' && o.overflowY === 'visible') continue;
+          const a = p.getBoundingClientRect();
+          return r.top - spread < a.top - 0.5 || r.bottom + spread > a.bottom + 0.5 || r.left - spread < a.left - 0.5 || r.right + spread > a.right + 0.5;
+        }
+        return false;
+      })(),
       top: Math.round(r.top),
       left: Math.round(r.left + (e.closest('.tabs')?.scrollLeft || 0)), // the tab strip scrolls on phones: compare positions inside it
     };
@@ -407,6 +420,8 @@ try {
     }
     const bad = stops.filter((s) => !s.ring || !s.seen);
     if (bad.length) throw new Error(`${label}: focus not visible on ${bad.map((s) => s.id).join(', ')}`);
+    const cut = stops.filter((s) => s.clipped);
+    if (cut.length) throw new Error(`${label}: focus ring cut off by a scrolling container on ${cut.map((s) => s.id).join(', ')}`);
     const bar = stops.filter((s) => s.inBar);
     const back = bar.findIndex((s, i) => i && (s.top < bar[i - 1].top - 12 || (Math.abs(s.top - bar[i - 1].top) <= 12 && s.left < bar[i - 1].left))); // rows are 40+ px apart; items of different heights sit a few px apart within one
     if (back > 0) throw new Error(`${label}: Tab goes backwards in the header, ${bar[back - 1].id} (top ${bar[back - 1].top}, left ${bar[back - 1].left}) → ${bar[back].id} (top ${bar[back].top}, left ${bar[back].left})`);
@@ -465,6 +480,11 @@ try {
   await kbRec.goto(`${BASE}/reception.html`, { waitUntil: 'networkidle2' });
   await kbRec.waitForSelector('.card [data-history]');
   await tabPage(kbRec, 'reception inbox');
+  await kbRec.$eval('[data-tab=chats]', (b) => b.click());
+  await kbRec.waitForSelector('[data-open-chat]', { timeout: 15000 });
+  await tabPage(kbRec, 'reception chats');
+  await kbRec.$eval('[data-tab=inbox]', (b) => b.click());
+  await kbRec.waitForSelector('.card [data-history]');
   for (const vp of [{ width: 768, height: 1024, isMobile: true, hasTouch: true }, phone]) {
     await kbRec.setViewport(vp);
     await kbRec.waitForSelector('.card [data-history]');
