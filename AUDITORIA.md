@@ -65,7 +65,7 @@ Se repitieron los mismos ataques con `curl` contra el build de producción, las 
 | A-21 | SEO/PWA | ✅ `description`, Open Graph, manifest, `robots.txt` y `noindex` en el back-office |
 | A-22 | Consola en el build | ✅ Solo con `CONCIERGE_CONSOLE=1` |
 | A-23 | Docker | ✅ Se mantiene el `Dockerfile` de tu equipo, con `HEALTHCHECK` |
-| A-24 | GTFS del Metro caduca | ⏳ Externo, ver PENDIENTES P-03 |
+| A-24 | GTFS del Metro caduca | ✅ Renovado el 9 nov desde NAP, válido hasta el 20/03/2027 (A-44) |
 
 ### Nuevos hallazgos de esta 2ª pasada (ya corregidos)
 
@@ -208,3 +208,11 @@ Admin y Recepción pasan a ser una sola app, `reception.html`, con las pestañas
 |---|---|---|
 | A-42 | El anillo de foco de las pestañas (11 en el superadmin) y de las conversaciones de la lista del chat se dibujaba fuera de la caja y las tiras con scroll lo recortaban: sobre «Hotel» solo se veía una línea vertical. El E2E lo daba por bueno porque miraba la regla CSS, no la geometría (visto en la revisión visual del 5 nov) | ✅ Anillo interior (`inset`) en `.tabs button` y `.chat-item`. El E2E mide ahora si el `box-shadow` cabe dentro del contenedor con scroll más cercano; sin el arreglo falla en las 11 pestañas y en la lista del chat. El recorrido con teclado cubre también la pestaña Chat |
 | A-43 | `npm audit`: 4 vulnerabilidades en dependencias de producción (DOMPurify crítica, vía Cesium; body-parser y nodemailer altas; qs moderada) y 11 contando desarrollo (puppeteer, vite, sharp, zod…) | ✅ `npm audit fix` (cambios dentro de rango: 21 paquetes) y `nodemailer` 7 → 10.4.0, que es salto mayor (D-25). `npm audit`: 0 en producción y 0 en total. Suites tras el cambio: `test:concierge` 67/67, E2E 47/47, `npm test` de God's Eye View 5055/5055 (10 omitidas) |
+
+## Primera actualización real desde NAP (9 nov 2026)
+
+| ID | Hallazgo (demostrado) | Estado |
+|---|---|---|
+| A-44 | Con la clave puesta, `npm run gtfs:update` devolvía `NAP returned 500` para los dos ficheros. La clave era válida (`GET /api/Fichero/1370` responde 200 con los metadatos del conjunto «Metro de Granada»). El fallo era nuestro: 1367 y 1370 son ids de *conjunto de datos* (`conjuntoDatoId`) y `…/api/Fichero/download/<id>` espera el id del *fichero* (`ficheroId`, dentro de `ficherosDto`); NAP responde 500 a cualquier id de conjunto en esa ruta, incluso a uno inventado. D-16 solo había comprobado la respuesta sin clave («Api Key was not provided»), que no distingue ambos casos | ✅ El actualizador lee primero los metadatos del conjunto, elige su fichero GTFS-ZIP validado más reciente y descarga ese. Ejecución real: bus urbano «unchanged» (fichero 1564, válido hasta 24/10/2027, bytes idénticos al local); Metro «updated» (fichero 1568, 7526 viajes, válido hasta 20/03/2027; sustituye en su sitio al que caducaba el 13/12/2026). `GTFS_NAP_FILES` sigue aceptando los ids del catálogo, que es lo que ve el usuario en NAP |
+
+**Pruebas:** el doble de NAP de `gtfs-update.test.mjs` sirve ahora metadatos por conjunto y zips por fichero; se comprueba que la descarga va al fichero que nombran los metadatos y no al id del conjunto, que se elige el GTFS-ZIP validado más reciente (nunca un pdf ni una subida sin validar) y que un conjunto sin GTFS se reporta sin tocar los ficheros locales. Con los horarios nuevos: `test:concierge` 69/69 (2 omitidas), E2E 47/47.

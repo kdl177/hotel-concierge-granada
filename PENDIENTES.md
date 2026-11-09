@@ -2,7 +2,7 @@
 
 - **P-01** — La cámara con Google Photorealistic 3D Tiles no se puede validar visualmente desde el entorno de pruebas (sin clave ni GPU real). Se validó con terreno elipsoidal/OSM: centrado 0–0,7 m.
 - **P-02** — Open-Meteo, OSRM y Nominatim no son accesibles desde el entorno de pruebas (503). Los fallos se gestionan con estados de error, pero el resultado real se comprueba en tu PC.
-- **P-03** — El GTFS del Metro de Granada caduca el 13/12/2026. La renovación ya es automática si pones `NAP_API_KEY` en `.env` (clave de tu cuenta gratuita en nap.transportes.gob.es); sin clave, Admin sigue avisando y hay que sustituir el .zip a mano. Queda: poner la clave.
+- **P-03** — ✅ Resuelto (9 nov): con `NAP_API_KEY` en `.env`, `npm run gtfs:update` renovó el Metro (fichero NAP 1568, válido hasta el 20/03/2027; el anterior caducaba el 13/12/2026) y confirmó el bus urbano (hasta el 24/10/2027). El servidor lo repite cada 7 días. La primera ejecución destapó que el id configurable es el del conjunto de datos y no el del fichero (A-44).
 - **P-04** — No puedo medir el gasto en USDT desde la sesión. Se trabaja por fases y porcentajes (PLAN.md).
 - **P-05** — Reseñas y pagos no aplican a esta app (D-01).
 - **P-06** — Tras actualizar, ejecuta `npm install` en PowerShell dentro de `hotel-concierge-rome`. Hay dependencias nuevas: `compression`, fuentes `@fontsource-variable/*` y `axe-core` (esta última solo para pruebas). No lo hago yo porque instalaría binarios de Linux en tu carpeta de Windows (D-12).
