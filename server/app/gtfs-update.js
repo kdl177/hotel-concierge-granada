@@ -1,12 +1,14 @@
 /**
  * Keeps the GTFS timetables fresh from Spain's National Access Point
- * (nap.transportes.gob.es): downloads each configured file with the account's
- * ApiKey, checks it is a real feed, and only replaces the local copy when the
- * new one is valid at least as long as the old one. Never leaves a broken or
- * older feed behind.
+ * (nap.transportes.gob.es): for each configured dataset ("conjunto de datos",
+ * the id NAP shows in its catalogue) it reads the dataset's metadata with the
+ * account's ApiKey, picks its newest validated GTFS-ZIP file, downloads it,
+ * checks it is a real feed, and only replaces the local copy when the new one
+ * is valid at least as long as the old one. Never leaves a broken or older feed
+ * behind.
  *
  *   NAP_API_KEY=…                       your key (free account at nap.transportes.gob.es)
- *   GTFS_NAP_FILES=1367:bus-urbano-granada,1370:metro-granada   (default: these two)
+ *   GTFS_NAP_FILES=1367:bus-urbano-granada,1370:metro-granada   (dataset ids; default: these two)
  *   GTFS_UPDATE_DAYS=7                  how often the server checks (0 = never, only manual)
  *
  *   npm run gtfs:update                 same thing from the command line
@@ -24,12 +26,13 @@ import {
 import path from 'node:path';
 import { parseCsv, unzip } from './gtfs.js';
 
+export const NAP_DATASET = 'https://nap.transportes.gob.es/api/Fichero/'; // + conjuntoDatoId → metadata
 export const NAP_DOWNLOAD =
-  'https://nap.transportes.gob.es/api/Fichero/download/';
+  'https://nap.transportes.gob.es/api/Fichero/download/'; // + ficheroId → zip
 export const DEFAULT_FILES = '1367:bus-urbano-granada,1370:metro-granada';
 const MAX_BYTES = 80 * 1024 * 1024;
 
-/** "1367:bus-urbano-granada,1370:metro-granada" → [{ id, name }] */
+/** "1367:bus-urbano-granada,1370:metro-granada" → [{ id, name }] (dataset ids) */
 export function parseFileList(spec = DEFAULT_FILES) {
   return String(spec)
     .split(',')
@@ -38,7 +41,7 @@ export function parseFileList(spec = DEFAULT_FILES) {
     .map((s) => {
       const [id, name] = s.split(':');
       if (!/^\d+$/.test(id))
-        throw new Error(`GTFS_NAP_FILES: bad file id "${s}"`);
+        throw new Error(`GTFS_NAP_FILES: bad dataset id "${s}"`);
       return {
         id,
         name: (name || `nap-${id}`).replace(/[^a-z0-9_-]/gi, '-').toLowerCase(),
@@ -84,9 +87,29 @@ function localFeeds(dir) {
 const sameAgencies = (a, b) =>
   a.length && a.length === b.length && a.every((x) => b.includes(x));
 
+const napError = (res) =>
+  new Error(
+    res.status === 401 || res.status === 403
+      ? `NAP rejected the ApiKey (${res.status})`
+      : `NAP returned ${res.status}`,
+  );
+
+/** The newest validated GTFS-ZIP file of a dataset, from its metadata. */
+export function pickGtfsFile(meta) {
+  const files = (meta?.ficherosDto || [])
+    .filter((f) => f.tipoFicheroNombre === 'GTFS-ZIP' && f.validado !== false)
+    .sort((a, b) =>
+      String(b.fechaActualizacion || '').localeCompare(
+        String(a.fechaActualizacion || ''),
+      ),
+    );
+  if (!files.length) throw new Error('dataset has no validated GTFS-ZIP file');
+  return files[0];
+}
+
 /**
- * Downloads every configured file and returns a report:
- *   [{ id, name, file, status: 'updated'|'unchanged'|'kept'|'error', validTo, trips, reason? }]
+ * Downloads every configured dataset's GTFS file and returns a report:
+ *   [{ id, fileId, name, file, status: 'updated'|'unchanged'|'kept'|'error', validTo, trips, reason? }]
  * `updated` — a newer feed replaced the local one (or none existed);
  * `unchanged` — same validity as the local copy; `kept` — the download is valid
  * for less time than the local copy, so the local one stays; `error` — download
@@ -106,6 +129,7 @@ export async function updateFeeds({
   for (const { id, name } of list) {
     const entry = {
       id,
+      fileId: null,
       name,
       file: `${name}.zip`,
       status: 'error',
@@ -114,16 +138,19 @@ export async function updateFeeds({
     };
     report.push(entry);
     try {
-      const res = await fetchImpl(NAP_DOWNLOAD + id, {
+      // The dataset id is not downloadable itself (NAP answers 500): find its GTFS file first.
+      const metaRes = await fetchImpl(NAP_DATASET + id, {
+        headers: { ApiKey: apiKey, Accept: 'application/json' },
+        redirect: 'follow',
+      });
+      if (!metaRes.ok) throw napError(metaRes);
+      const gtfs = pickGtfsFile(await metaRes.json());
+      entry.fileId = gtfs.ficheroId;
+      const res = await fetchImpl(NAP_DOWNLOAD + gtfs.ficheroId, {
         headers: { ApiKey: apiKey, Accept: 'application/zip, */*' },
         redirect: 'follow',
       });
-      if (!res.ok)
-        throw new Error(
-          res.status === 401 || res.status === 403
-            ? `NAP rejected the ApiKey (${res.status})`
-            : `NAP returned ${res.status}`,
-        );
+      if (!res.ok) throw napError(res);
       const len = Number(res.headers?.get?.('content-length') || 0);
       if (len > MAX_BYTES) throw new Error('file too large');
       const buf = Buffer.from(await res.arrayBuffer());

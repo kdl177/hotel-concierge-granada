@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync, readdirSync, readFileSync, writeFileSync, existsSy
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import zlib from 'node:zlib';
-import { updateFeeds, inspectFeed, parseFileList, NAP_DOWNLOAD } from '../../server/app/gtfs-update.js';
+import { updateFeeds, inspectFeed, parseFileList, NAP_DOWNLOAD, NAP_DATASET, pickGtfsFile } from '../../server/app/gtfs-update.js';
 import { createTransit } from '../../server/app/gtfs.js';
 import { startApp, client, superadmin } from './helpers.mjs';
 
@@ -67,9 +67,19 @@ function feed(agency, end, trips = 2) {
     'stop_times.txt': 'trip_id,arrival_time,departure_time,stop_id,stop_sequence\nT0,08:00:00,08:00:00,S1,1\nT0,08:10:00,08:10:00,S2,2\n',
   });
 }
+// NAP as the tests see it: /api/Fichero/<dataset> → metadata whose GTFS-ZIP file is <dataset>+10000; /download/<file> → the body.
+const FILE_OFFSET = 10000;
 const fakeNap = (bodies, seen = []) => async (url, opts) => {
   seen.push({ url, key: opts?.headers?.ApiKey });
-  const id = url.replace(NAP_DOWNLOAD, '');
+  if (!url.startsWith(NAP_DOWNLOAD)) {
+    const dataset = url.replace(NAP_DATASET, '');
+    const body = bodies[dataset];
+    if (body === 401) return { ok: false, status: 401, headers: new Headers() };
+    if (!body) return { ok: false, status: 404, headers: new Headers() };
+    const meta = typeof body === 'object' && !Buffer.isBuffer(body) && body.ficherosDto ? body : { ficherosDto: [{ ficheroId: Number(dataset) + FILE_OFFSET, tipoFicheroNombre: 'GTFS-ZIP', validado: true, fechaActualizacion: '2026-01-01T00:00:00' }] };
+    return { ok: true, status: 200, headers: new Headers(), json: async () => meta };
+  }
+  const id = String(Number(url.replace(NAP_DOWNLOAD, '')) - FILE_OFFSET);
   const body = bodies[id];
   if (body === 401) return { ok: false, status: 401, headers: new Headers() };
   if (!body) return { ok: false, status: 404, headers: new Headers() };
@@ -94,7 +104,7 @@ test('parseFileList: defaults, custom names, bad ids', () => {
     { id: '42', name: 'mi-bus' },
     { id: '7', name: 'nap-7' },
   ]);
-  assert.throws(() => parseFileList('abc'), /bad file id/);
+  assert.throws(() => parseFileList('abc'), /bad dataset id/);
 });
 
 test('updateFeeds: downloads with the ApiKey, writes new feeds, replaces older ones, keeps newer local ones', async () => {
@@ -107,7 +117,9 @@ test('updateFeeds: downloads with the ApiKey, writes new feeds, replaces older o
       ['bus-urbano-granada.zip', 'updated', '20270301'],
       ['metro-granada.zip', 'updated', '20261213'],
     ]);
-    assert.ok(seen.every((s) => s.key === 'k1' && s.url.startsWith(NAP_DOWNLOAD)), 'ApiKey header on every NAP request');
+    assert.ok(seen.every((s) => s.key === 'k1' && s.url.startsWith(NAP_DATASET)), 'ApiKey header on every NAP request');
+    assert.ok(seen.some((s) => s.url === NAP_DOWNLOAD + (1370 + FILE_OFFSET)), 'downloads the GTFS file named by the dataset metadata, not the dataset id');
+    assert.equal(report.find((r) => r.id === '1370').fileId, 1370 + FILE_OFFSET);
     assert.deepEqual(readdirSync(dir).sort(), ['bus-urbano-granada.zip', 'metro-granada.zip']);
     // Same files again → unchanged; metro renewed → updated; bus download older than local → kept.
     report = await updateFeeds({ dir, apiKey: 'k1', fetchImpl: fakeNap({ 1367: feed('Rober', '20261001'), 1370: feed('Metro de Granada', '20271213', 5) }) });
@@ -207,5 +219,29 @@ test('POST /api/admin/transit/update: superadmin only; 409 when the server has n
     assert.equal(info.data.nap.last.report[0].validTo, '20271231');
   } finally {
     await withKey.close();
+  }
+});
+
+test('pickGtfsFile: the newest validated GTFS-ZIP of a dataset, never a pdf or an unvalidated upload', () => {
+  const meta = { ficherosDto: [
+    { ficheroId: 2552, tipoFicheroNombre: 'Documento pdf', validado: false, fechaActualizacion: '2026-08-03T12:19:58' },
+    { ficheroId: 1500, tipoFicheroNombre: 'GTFS-ZIP', validado: true, fechaActualizacion: '2025-11-02T10:00:00' },
+    { ficheroId: 1568, tipoFicheroNombre: 'GTFS-ZIP', validado: true, fechaActualizacion: '2026-10-27T18:20:05' },
+    { ficheroId: 1600, tipoFicheroNombre: 'GTFS-ZIP', validado: false, fechaActualizacion: '2026-11-01T09:00:00' },
+  ] };
+  assert.equal(pickGtfsFile(meta).ficheroId, 1568);
+  assert.throws(() => pickGtfsFile({ ficherosDto: [{ ficheroId: 1, tipoFicheroNombre: 'Documento pdf' }] }), /no validated GTFS-ZIP/);
+  assert.throws(() => pickGtfsFile({}), /no validated GTFS-ZIP/);
+});
+
+test('updateFeeds: a dataset without a GTFS file is reported, local feeds untouched', async () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'gtfs-nap-'));
+  try {
+    const report = await updateFeeds({ dir, apiKey: 'k', files: '77:solo-pdf', fetchImpl: fakeNap({ 77: { ficherosDto: [{ ficheroId: 9, tipoFicheroNombre: 'Documento pdf' }] } }) });
+    assert.equal(report[0].status, 'error');
+    assert.match(report[0].reason, /no validated GTFS-ZIP/);
+    assert.deepEqual(readdirSync(dir), []);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
   }
 });
